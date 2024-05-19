@@ -1,9 +1,12 @@
 sector_sz = 0x200
 track_sz = 0x1000
 
+fat_t = tuple[int, ...]
 
-def disk_factory(scroll_nom: str) -> tuple[bytes, ...]:
-    with open(scroll_nom, "br") as file:
+
+def disk_factory(scroll_nom: str, read_only) -> tuple[bytes, ...]:
+    mode = "br" if read_only else "br+"
+    with open(scroll_nom, mode) as file:
         scroll = file.read()
     disk = []
     while scroll:
@@ -12,17 +15,56 @@ def disk_factory(scroll_nom: str) -> tuple[bytes, ...]:
     return tuple(disk)
 
 
-def fat_factory(sector: bytes) -> tuple[int, ...]:
+def fat12_factory(sector: bytes) -> fat_t:
     table = []
+    sector, tail = sector[:-2], sector[-2:]  # 0x200 % 3 = 2
     while sector:
         entrii, sector = sector[:3], sector[3:]
         entrii = tuple(int(e) for e in entrii)
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
         table.append((entrii[1] // 0x10) + 0x100 * entrii[2])
+    table.append(tail[0] + 0x100 * (tail[1] % 0x10))
     return tuple(table)
 
+
+class DiskReadError(Exception):
+    def __init__(self, enum):
+        message = "Read Error: " + {
+            00: "empty sector"
+
+        }[enum]
+        super().__init__()
+
+
+
+def file_get(fat: fat_t, head: int):
+    """
+    :param fat: array of pointers
+    :param head: first logical sector
+    """
+    pointer = head
+    file = []
+    while True:
+        file.append(pointer)
+        pointer = fat[pointer]
+        if pointer >= 0xFF0 or not pointer:
+            if pointer >= 0xFF8:
+                break
+            else:
+                raise DiskReadError(pointer)
+
+
+"""
+fili_get
+file_headi_get
+empty space locate
+file_add
+format
+"""
+
 disk = disk_factory(
-    r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\IBM PC-DOS 1.10 (5.25-160k)\Images\Raw\DISK01.IMA")
+    r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\IBM PC-DOS 1.10 (5.25-160k)\Images\Raw\DISK01.IMA",
+    read_only=True)
 assert disk[1] == disk[2]
-fat12 = fat_factory(disk[1])
+fat12 = fat12_factory(disk[1])
 pass
