@@ -1,11 +1,10 @@
 sector_sz = 0x200
 track_sz = 0x1000
+fat12_sz = 0x155
 
 disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
-
-# in 0x200 bytes or 0x1000 bits there are E3 12-bit entries. So actually only up to 0x0E3 is meaningfull
-
+loc_t = list[int]
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
     mode = "br" if read_only else "br+"
@@ -31,13 +30,15 @@ def fat12_factory(sector: bytes) -> fat_t:
 
 
 class DiskReadError(Exception):
-    def __init__(self, enum):
-        enum = "Empty" if enum == 0 else "Bad" if enum == 0xFF7 else "Reserved"
-        message = f"Read Error: {enum} cluster"
+    def __init__(self, code, back):
+        opt = "Empty" if code == 0 else "Bad" if code == 0xFF7 else "Reserved"
+        message = f"Read Error: {opt} cluster"
         super().__init__(message)
+        self.code = code
+        self.back = back
 
 
-def file_locate(fat: fat_t, head: int):
+def file_locate(fat: fat_t, head: int) -> loc_t:
     """
     :param fat: array of pointers
     :param head: first logical sector
@@ -51,7 +52,7 @@ def file_locate(fat: fat_t, head: int):
             if pointer >= 0xFF8:
                 break
             else:
-                raise DiskReadError(pointer)
+                raise DiskReadError(pointer, file)
     return file
 
 
@@ -59,6 +60,24 @@ def file_get(disk: disk_t, fat: fat_t, head: int):
     file = file_locate(fat, head)
     return b"".join(disk[i] for i in file)
 
+
+def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
+    unchecked = set(range(fat12_sz))
+    fili = []
+    empty = []
+    while unchecked:
+        pointer = min(unchecked)
+        try:
+            file = file_locate(fat, pointer)
+        except DiskReadError as err:
+            rem = err.back
+            if err.code == 0:
+                empty.append(pointer)
+        else:
+            rem = file
+            fili.append(file)
+        unchecked -= rem
+    return fili, empty
 
 """
 fili_get
