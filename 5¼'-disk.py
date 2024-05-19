@@ -1,10 +1,13 @@
 sector_sz = 0x200
 track_sz = 0x1000
 
+disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 
+# in 0x200 bytes or 0x1000 bits there are E3 12-bit entries. So actually only up to 0x0E3 is meaningfull
 
-def disk_factory(scroll_nom: str, read_only) -> tuple[bytes, ...]:
+
+def disk_factory(scroll_nom: str, read_only) -> disk_t:
     mode = "br" if read_only else "br+"
     with open(scroll_nom, mode) as file:
         scroll = file.read()
@@ -22,22 +25,19 @@ def fat12_factory(sector: bytes) -> fat_t:
         entrii, sector = sector[:3], sector[3:]
         entrii = tuple(int(e) for e in entrii)
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
-        table.append((entrii[1] // 0x10) + 0x100 * entrii[2])
+        table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
     table.append(tail[0] + 0x100 * (tail[1] % 0x10))
     return tuple(table)
 
 
 class DiskReadError(Exception):
     def __init__(self, enum):
-        message = "Read Error: " + {
-            00: "empty sector"
-
-        }[enum]
-        super().__init__()
+        enum = "Empty" if enum == 0 else "Bad" if enum == 0xFF7 else "Reserved"
+        message = f"Read Error: {enum} cluster"
+        super().__init__(message)
 
 
-
-def file_get(fat: fat_t, head: int):
+def file_locate(fat: fat_t, head: int):
     """
     :param fat: array of pointers
     :param head: first logical sector
@@ -52,6 +52,12 @@ def file_get(fat: fat_t, head: int):
                 break
             else:
                 raise DiskReadError(pointer)
+    return file
+
+
+def file_get(disk: disk_t, fat: fat_t, head: int):
+    file = file_locate(fat, head)
+    return b"".join(disk[i] for i in file)
 
 
 """
