@@ -238,9 +238,16 @@ ibmwhi[e00:4400] = ibmage[*]
 
 ibmwhi[4400:5000] = F6[*]
 
-ibmage[200:400]= ibmage[400:600]
+ibmage[11b:163] =  "\r\nNon-System disk or disk error
+					\r\nReplace and strike any key when ready"
+ibmage[163:165] = 1
+ibmage[165:167] = 2
+ibmage[167:17D] = "\r\nDisk Boot failure\0"
+ibmage[17D:1A4] = "Microsoft,Inc ibmbio  com0ibmdos  com0"
+ibmage[1C0:200] = 0
 ibmage[3C4:3D9]= 0
 ibmage[3D9:400]= F6[*]
+ibmage[400:600]= ibmage[200:400]
 
 
 log_phy_table = {
@@ -289,5 +296,7 @@ sector 0 is boot
 A..13 second FAT // 1400:2600; 9 sectors
 13..21 root directory // 2600:4200; (42-26=20-4=1C)/2 = 8+6=E; (42-26)/2= 21-13 = 10-2 =E; E sectors
 data sectors (logical sector 2) start as 21
+
+how do we kow the length of a directory
 */
 
