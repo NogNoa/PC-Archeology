@@ -189,7 +189,7 @@ log_phy_table = {
 	b: 1c // 38/2 = 18+4 dif=11
 }
 
-log_py = λ x. x+8
+log_py = λ x. 2x+6
 
 /*
 format /S copies com files imbbio, ibmdos and commmand, for absolute minimal dos.
@@ -297,6 +297,19 @@ A..13 second FAT // 1400:2600; 9 sectors
 13..21 root directory // 2600:4200; (42-26=20-4=1C)/2 = 8+6=E; (42-26)/2= 21-13 = 10-2 =E; E sectors
 data sectors (logical sector 2) start as 21
 
-how do we kow the length of a directory
+how do we know the length of a directory?
+
+each sector of a directory has 10 entries
+
+1400-600 bytes= E00 bytes = E00/20 entries = 70 entries
+
+the 0th byte of the fat (together with the dos version and the disk's physical format) indicate the structure:
+for dos 1 and 5.25'' DD 0d48tpi disk:
+FF: 2 FATs, 70 entry root directory, 2 logical sector / cluster (physical sector)
+FE: 2 FATs, 40 entry root directory, 1 logical sector / cluster
+the next bytes of the fat making up the rest or the first 2 entries are FF FF
+
+tpi = tracks per inch
+DD = double density, i.e two-sided
 */
 
