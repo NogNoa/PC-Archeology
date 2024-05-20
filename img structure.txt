@@ -1,0 +1,293 @@
+img = cdpdos.img
+pad20 = [0]+[F6]*1F
+
+toc_struct = {
+name:8  // space padded
+ext:3
+attributes:1
+0:2
+create time:2 // ..10
+create date:2
+access date:2
+junk:2
+Write time:2 // ..18
+Write date:2
+First logical sector:2
+size:4
+}
+
+boot = img[:200]
+
+boot[:2] = jmp rel8, 20h // jmp +20 from next byte, i.e. to 22
+boot[2] = NOP
+boot[3:5] = 14
+boot[5:7] = 0
+boot[7:9] = 60 
+
+boot[9:22] = " August-3-1982 [CDP inc.]"
+
+boot[14D:1C4] = "IBMBIO  COMIBMDOS  COM\r\n
+				Fatal Disk Error on Read\r\n
+				Non-System disk or disk error\r\n
+				Replace and strike any key when ready."
+boot[1C4:1D4] = "$Michael D. Luke"
+
+boot[1FB:] = 0
+
+/* OEM is on 9 instead of 6
+No bios parameter block on B (introduced with DOS 2.0)
+Error massages on 165 instead of 8B
+No sector on the disk, including boot, has the AA55 signature
+Obviously no partition table on a VBR.
+*/ 
+
+img[200:400] = img[400:600]
+
+img[5DC:600] = F6[*]
+
+img[600:980] = toc_struct * 1C
+img[980:1400] = pad20[*]
+
+ibmbio.com = img[1400:1BFF]
+img[1BFF] = 5
+ibmdos.com = img[1C00:3500]
+img[3500:3600] // not in files
+img[3600:3800] = pad20[*]
+
+command.com = img[3800:4B5F]
+	command[438:540] = 0
+img[4B5F:4BFF] // not in files
+img[4BFF] = 5
+debug.com = img[4C00:6373]
+	debug[16CE:1756] = 0
+img[6373:6400] = "000\r\n
+				  {SUB}736B2457726974652070726F746563D0\r\n
+				  :1A173E007424206572726F722072656164696E6720647269766520410D0A03\r\n
+				  :1A175800247265616477726974496E73756"
+edlin.com = img[6400:6D80]
+	edlin[903:] = 0
+img[6D80:6E00] = "5244E6F20726F6F6D45\r\n
+				  :1A09A20020696E206469726563746F727920666F722066696C6524446973E4\r\n
+				  :1A09BC006B2066756C6C2D2D66696C65207772697"
+img[6E00:7000] = F6[*]
+
+chkdsk.com = img[7000:76B8]
+	chkdsk[5A1:] = 0
+img[76B8:7800] = 0
+sys.com =  img[7800:7A5D]
+sys.com[15D:] = img[7A5D:7B5D]
+img[7B5D:7B80] = 0
+img[7B80:7C00] // not in files
+filcom.com = img[7C00:9C80]
+	filcom[201F:] = 0
+img[9C80:9D5F]= command.com[1280:]
+img[9D5F:9E00] = 0
+img[9E00:A000] = F6[*]
+
+format.com = img[A000:AEB6]
+	format[CB6:] = 0
+img[AEB6:B000] = 0
+exe2bin.exe = img[B000:B500]
+	exe2bin[487:] = 0
+img[B500:B600] // not in files
+	img[B56E:B600] = 0
+img[B600:B800] = F6[*]
+
+link.exe = img[B800:15B80]
+img[15B80:15C00] = 0
+masm.exe = img[15C00:26580]
+	masm[10940:] = 0
+img[26580:26600] // not in files
+img[26600:26800] = F6[*]
+
+cref.exe = img[26800: 29E00]
+	cref[359B:] = 0
+img[29E00:2A000] = F6[*]
+
+lib.exe = img[2A000:31D80]
+	lib[61DF:] = 0
+img[31D80:32000] = F6[*]
+
+basica.com = img[32000:321E0]
+	basica.com[1AE:] = 0
+
+
+Basic.com = img[32400:325E2]
+	basic.com[1B0:] = 0
+
+
+basica.exe[:400] = img[32800:32C00]
+	basica.exe[19:300] = 0
+hdboot.sys = img[32C00:32E00]
+img[32E00:33000] = F6[*]
+
+basica.exe[400:C00] =img[33000:33800]
+basic86.com = img[33800:3AA00]
+	basic86[71F3:] = 0
+img[3AA00:3AC00] = F6[*]
+
+basica.exe[C00:] =img[3AC00:47600]
+	basica.exe[D2BA:] = 0
+	
+
+define.dat = img[48000:48400]
+	define.dat[21C:] = 0
+define.exe = img[48400:4AE80]
+	define.exe[295d:] = 0
+
+
+diskcomp.com = img[4B000:4B744]
+img[4B744:4B7E6] = diskcomp[56C:60E]
+
+/*
+files must start on $400 boundaries. either raw F6 or pad20 used to pad
+every sector is exactly 200 bytes. 
+on init boot sector is copied to RAM:7COO and control is passed to it.
+*/
+
+format = $(format B:)
+format[:200] = img[:200]
+	img[1FB:200] = 0
+format[200:3DC] = [FF]*3 + 0[*]
+	img[3C6:3DC] = 0
+format[3DC:400] = img[*] = F6[*]
+format[400:5DC] = [FF]*3 + 0[*]
+	img[5C6:5DC] = 0
+format[5DC:600] = img[*] = F6[*]
+format[600:1400] = pad20[*]
+format[1400:] = F6[*]
+
+/*
+format allocate sectors 1 and 2 that starts with 3 bytes of all-1
+*/
+
+wHidden = $(format B:/S)
+wHidden[:200] = img[:200]
+wHidden[200:218] = img[200:218]
+wHidden[218:3DC] = 0
+wHidden[400:418] = img[400:418]
+wHidden[418:5DC] = 0
+
+wHidden[600:660] = img[*] = toc_struct * 3
+	= [
+		{"IBMBIO  COM", 0, 0, 0, 0, $f, 1,  21, 0,  2,  7ff},
+		{"IBMDOS  COM", 0, 0, 0, 0, 86, 0,  21, 0,  4, 1900},
+		{"COMMAND COM", 0, 0, 0, 0, 40, 2,  21, 0, $b, 135f}
+	]
+
+
+wHidden[980:3500] = img[*]
+wHidden[3500:3600] != img[*] != F6[*]
+wHidden[3600:4B5F] = img[*]
+wHidden[4B5F:4BFF] != img[*] != F6[*]
+wHidden[4BFF] = img[4BFF] = 5
+wHidden[4C00:] = F6[*]
+
+log_phy_table = {
+	2:  a, // 14/2= 8+2  dif=8
+	4:  e, // 1c/2 = 8+6 dif=A
+	b: 1c // 38/2 = 18+4 dif=11
+}
+
+log_py = λ x. x+8
+
+/*
+format /S copies com files imbbio, ibmdos and commmand, for absolute minimal dos.
+*/
+
+ibmage = IBM PC-DOS 1.10
+pade5 = [e5]+[F6]*1F
+
+ibmformat = ibmage $(format B:)
+ibmformat[200:3DA] = [FE] + [FF]*2 + 0[*]
+ibmformat[400:3DA] = [FE] + [FF]*2 + 0[*]
+ibmformat[600:E00] = pade5[*]
+ibmformat[E00:1000] = F6[*]
+
+F6 = 0b1111_0110
+E5 = 0b1110_0101
+/*
+minimum disk size is 1000 (4KB) or 8 sectors. 
+(way below the 160 KB single sided floppy capacity)
+1 boot sector that is coppied exactly from the host disk.
+sectors 1 and 2 get the fe ff ff from the host. and clear (set to 0) all bytes the are defined (not read as F6) on host.
+initial e5 indicate an unused file entry
+initial 0 indicate an unused file entry, and also all subsquent entries in the same directory are unused.
+*/
+
+ibmwhi = ibmage $(format B:/S)
+
+ibmwhi[203:22B] = ibmage[*]
+ibmwhi[22C] = $F
+ibmwhi[403:42B] = ibmage[*]
+ibmwhi[22C] = $F
+ibmwhi[600:660] = ibmage[*] = toc_struct * 3
+	= [
+		{"IBMBIO  COM", 0, 0, 0, 0, 0, 60, a7, 04,  2,  780},
+		{"IBMDOS  COM", 0, 0, 0, 0, 0, 60, a7, 04,  6, 1900},
+		{"COMMAND COM", 0, 0, 0, 0, 0, 60, a7, 04, 13, 135f}
+	]
+
+ibmwhi[e00:4400] = ibmage[*]
+	imbbio.com = ibmage[e00:1580]
+		ibmage[1580:1600] = 0
+	ibmdos.com = ibmage[1600:2F00]
+		ibmage[2F00:3000] = 0
+	command.com = ibmage[3000:435F]
+		ibmage[435F:4400] = 0
+
+ibmwhi[4400:5000] = F6[*]
+
+ibmage[200:400]= ibmage[400:600]
+ibmage[3C4:3D9]= 0
+ibmage[3D9:400]= F6[*]
+
+
+log_phy_table = {
+	 2:  7, // e/2
+	 6:  B, // 16/2 = 8+3
+	13: 18  // 30/2
+}
+
+log_py = λ x. x+5
+
+/*
+sector 1 and 2 got $29 bytes of new information each
+sector 3 get the file table
+sectors 4..7 remain "padded"
+sector 7..22 is forther filled with data
+sectors 22..28 are undefined.
+
+it seems image files are filled to an alignment of 8 sectors = 4KB = 1000B = 1 track
+
+cdp Dos assumes 2-sided diskette when given a file. and refuses to format a file with "bad track 0"
+
+ibm-dos will happily format the same file up to the required size.
+
+cdp did format a file of 0d320 KB = 140KB of zeroes, but it's difficult to convince it to format a file now.
+
+It will only format disk files that are the size of a double sided disk. No options for size exist in this version of DOS
+*/
+
+
+/*
+Columbia Data Format 1.40 (CDP):
+sector 0 is boot
+1 and 2 are two identical copys of the file allocation table // 1 sector each
+3..A is the root and only directory // 600:1400; 7 sectors
+file sectors (logical sector 2) start at A
+
+ibm structure:
+sector 0 is boot
+1 and 2 are two copies of the file allcation table.
+3..7 is the root directory // 600:E00; 4 sectors
+file sectors (logical sector 2) start at 7
+
+fat12 standard:
+sector 0 is boot
+1..A is the first FAT // 200:1400; 9 sectors
+A..13 second FAT // 1400:2600; 9 sectors
+13..21 root directory // 2600:4200; (42-26=20-4=1C)/2 = 8+6=E; (42-26)/2= 21-13 = 10-2 =E; E sectors
+data sectors (logical sector 2) start as 21
+*/
+
