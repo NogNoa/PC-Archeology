@@ -6,6 +6,17 @@ disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
 
+
+class Disk:
+    def __init__(self, *args):
+        val = disk_factory(*args)
+        self.val = val
+        self.boot = val[0]
+        assert val[1] == val[2]
+        self.fat = val[1]
+        self.root_dir, self.data_floor = root_dir_factory(val)
+
+
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
     mode = "br" if read_only else "br+"
     with open(scroll_nom, mode) as file:
@@ -28,6 +39,9 @@ def fat12_factory(sector: bytes) -> fat_t:
     table.append(tail[0] + 0x100 * (tail[1] % 0x10))
     return tuple(table)
 
+def root_dir_factory(disk: disk_t):
+    dir = []
+    
 
 class DiskReadError(Exception):
     def __init__(self, code, back):
@@ -79,6 +93,7 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
         unchecked -= rem
     return fili, empty
 
+
 """
 fili_get
 file_headi_get
@@ -90,6 +105,6 @@ format
 disk = disk_factory(
     r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\IBM PC-DOS 1.10 (5.25-160k)\Images\Raw\DISK01.IMA",
     read_only=True)
-assert disk[1] == disk[2]
+
 fat12 = fat12_factory(disk[1])
 pass
