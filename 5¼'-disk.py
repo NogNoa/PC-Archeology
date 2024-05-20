@@ -61,15 +61,15 @@ def file_locate(fat: fat_t, head: int) -> loc_t:
     file = []
     while True:
         file.append(pointer)
-        pointer = fat[pointer]
-        if pointer >= len(fat):
-            if pointer >= 0xFF0 or not pointer:
-                if pointer >= 0xFF8:
-                    break
-                else:
-                    raise DiskReadError(pointer, file)
+        try:
+            pointer = fat[pointer]
+        except IndexError:
+            raise StopIteration
+        if pointer >= 0xFF0 or not pointer:
+            if pointer >= 0xFF8:
+                break
             else:
-                raise StopIteration
+                raise DiskReadError(pointer, file)
     return file
 
 
@@ -79,7 +79,7 @@ def file_get(disk: disk_t, fat: fat_t, head: int):
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
-    unchecked = set(range(fat12_sz))
+    unchecked = set(range(1, fat12_sz))
     fili = []
     empty = []
     while unchecked:
@@ -114,4 +114,4 @@ disk = disk_factory(
 fat12 = fat12_factory(disk[1])
 fili, emp = fili_locate(fat12)
 print("\n".join(str(f) for f in fili))
-print(emp)
+print(f"empty: {emp}")
