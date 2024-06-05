@@ -1,6 +1,17 @@
-sector_sz = 0x200
-track_sz = 0x1000
-fat12_sz = 0x155
+Sector_sz = 0x200
+Fat12_sz = 0x155
+Cylinders = 40
+Reserved_Sectors = 1
+Fat_Numb = 2
+Hidden_Sector_Numb = 0
+First_Physical_sector = 1
+
+Capacity = (320, 160, 360, 180)  # in KB
+Track_Sectors = (8, 8, 9, 9)
+Heads = (2, 1, 2, 1)
+Cluster_Sectors = (2, 1, 2, 1)
+Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
+
 
 disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
@@ -14,7 +25,11 @@ class Disk:
         self.boot = val[0]
         assert val[1] == val[2]
         self.fat = val[1]
-        self.root_dir, self.data_floor = root_dir_factory(val)
+        self.fat_id = self.fat[0]
+        fat_index = 0xff - self.fat_id
+        self.track_sz = Track_Sectors[fat_index] * Sector_sz
+        self.cluster_sz = Cluster_Sectors * Sector_sz
+        self.root_dir = root_dir_factory(val)
 
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
@@ -23,7 +38,7 @@ def disk_factory(scroll_nom: str, read_only) -> disk_t:
         scroll = file.read()
     disk = []
     while scroll:
-        sector, scroll = scroll[:sector_sz], scroll[sector_sz:]
+        sector, scroll = scroll[:Sector_sz], scroll[Sector_sz:]
         disk.append(sector)
     return tuple(disk)
 
@@ -79,7 +94,7 @@ def file_get(disk: disk_t, fat: fat_t, head: int):
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
-    unchecked = set(range(1, fat12_sz))
+    unchecked = set(range(1, Fat12_sz))
     fili = []
     empty = []
     while unchecked:

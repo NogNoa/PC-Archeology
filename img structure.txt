@@ -52,7 +52,7 @@ ibmbio.com = img[1400:1BFF]
 img[1BFF] = 5
 ibmdos.com = img[1C00:3500]
 img[3500:3600] // not in files
-img[3600:3800] = pad20[*]
+img[3600:3800] = F6[*]
 
 command.com = img[3800:4B5F]
 	command[438:540] = 0
@@ -305,8 +305,8 @@ each sector of a directory has 10 entries
 
 the 0th byte of the fat (together with the dos version and the disk's physical format) indicate the structure:
 for dos 1 and 5.25'' DD 0d48tpi disk:
-FF: 2 FATs, 70 entry root directory, 2 logical sector / cluster (physical sector)
-FE: 2 FATs, 40 entry root directory, 1 logical sector / cluster
+FF: 2 FATs, 70 entry root directory, 2 logical sector / physical sector
+FE: 2 FATs, 40 entry root directory, 1 logical sector / sector
 the next bytes of the fat making up the rest or the first 2 entries are FF FF
 
 tpi = tracks per inch
