@@ -1,5 +1,8 @@
+import dataclasses
+import datetime
+
 Sector_sz = 0x200
-Fat12_sz = 0x155  # in entries
+Fat12_Entries = 0x155  # sector_sz * 2 // 3
 Cylinders = 40
 # Reserved_Sectors = 1  # this has to be assumed to find fat-id in the first place
 Fat_Numb = 2
@@ -29,6 +32,8 @@ class Disk:
         fat_index = 0xff - self.fat_id
         self.track_sz = Track_Sectors[fat_index] * Sector_sz
         self.cluster_sz = Cluster_Sectors * Sector_sz
+        self.root_dir_sz = Root_Dir_Entries[fat_index] * 0x20
+        self.root_dir_sectors = Root_Dir_Entries[fat_index] // 0x10
         self.fat = fat12_factory(fat)
         self.root_dir = root_dir_factory(val)
 
@@ -54,6 +59,27 @@ def fat12_factory(sector: bytes) -> fat_t:
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
     table.append(last[0] + 0x100 * (last[1] % 0x10))
     return tuple(table)
+
+@dataclasses.dataclass
+class file_entry:
+    name: str  # 8
+    ext: str  # 3
+    # 3
+    create_datetime: datetime.datetime  # 4
+    access_date: datetime.date  # 2
+    # 2
+    write_datetime: datetime.datetime  # 4
+    first_cluster: int  # 2
+    size: int  # 4
+
+    def __init__(self, file: bytes):
+        self.name = str(file[:8])
+        self.ext = str(file[8:0xB])
+        self.create_datetime = datetime.datetime(file[0xE:0x12])
+        self.access_date = datetime.date(file[0x12:0x14])
+        self.create_datetime = datetime.datetime(file[0x16:0x1A])
+        self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
+        self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
 def root_dir_factory(disk: disk_t):
     dir = []
@@ -95,7 +121,7 @@ def file_get(disk: disk_t, fat: fat_t, pointer: int):
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
-    unchecked = set(range(1, Fat12_sz))
+    unchecked = set(range(1, Fat12_Entries))
     fili = []
     empty = []
     while unchecked:
