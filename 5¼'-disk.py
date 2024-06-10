@@ -1,10 +1,10 @@
 Sector_sz = 0x200
-Fat12_sz = 0x155
+Fat12_sz = 0x155  # in entries
 Cylinders = 40
-Reserved_Sectors = 1
+# Reserved_Sectors = 1  # this has to be assumed to find fat-id in the first place
 Fat_Numb = 2
 Hidden_Sector_Numb = 0
-First_Physical_sector = 1
+First_Physical_sector = 1  # under CHS
 
 Capacity = (320, 160, 360, 180)  # in KB
 Track_Sectors = (8, 8, 9, 9)
@@ -24,11 +24,12 @@ class Disk:
         self.val = val
         self.boot = val[0]
         assert val[1] == val[2]
-        self.fat = val[1]
-        self.fat_id = self.fat[0]
+        fat = val[1]
+        self.fat_id = fat[0]
         fat_index = 0xff - self.fat_id
         self.track_sz = Track_Sectors[fat_index] * Sector_sz
         self.cluster_sz = Cluster_Sectors * Sector_sz
+        self.fat = fat12_factory(fat)
         self.root_dir = root_dir_factory(val)
 
 
@@ -45,13 +46,13 @@ def disk_factory(scroll_nom: str, read_only) -> disk_t:
 
 def fat12_factory(sector: bytes) -> fat_t:
     table = []
-    sector, tail = sector[:-2], sector[-2:]  # 0x200 % 3 = 2
+    sector, last = sector[:-2], sector[-2:]  # 0x200 % 3 = 2
     while sector:
         entrii, sector = sector[:3], sector[3:]
-        entrii = tuple(int(e) for e in entrii)
+        # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
-    table.append(tail[0] + 0x100 * (tail[1] % 0x10))
+    table.append(last[0] + 0x100 * (last[1] % 0x10))
     return tuple(table)
 
 def root_dir_factory(disk: disk_t):
@@ -67,12 +68,12 @@ class DiskReadError(Exception):
         self.back = back
 
 
-def file_locate(fat: fat_t, head: int) -> loc_t:
+def file_locate(fat: fat_t, first: int) -> loc_t:
     """
     :param fat: array of pointers
-    :param head: first logical sector
+    :param first: first logical sector
     """
-    pointer = head
+    pointer = first
     file = []
     while True:
         file.append(pointer)
@@ -88,8 +89,8 @@ def file_locate(fat: fat_t, head: int) -> loc_t:
     return file
 
 
-def file_get(disk: disk_t, fat: fat_t, head: int):
-    file = file_locate(fat, head)
+def file_get(disk: disk_t, fat: fat_t, pointer: int):
+    file = file_locate(fat, pointer)
     return b"".join(disk[i] for i in file)
 
 
@@ -116,7 +117,7 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
 
 """
 fili_get
-file_headi_get
+file_firsti_get
 empty space locate
 file_add
 format
