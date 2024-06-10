@@ -15,7 +15,6 @@ Heads = (2, 1, 2, 1)
 Cluster_Sectors = (2, 1, 2, 1)
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
 
-
 disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
@@ -60,6 +59,21 @@ def fat12_factory(sector: bytes) -> fat_t:
     table.append(last[0] + 0x100 * (last[1] % 0x10))
     return tuple(table)
 
+
+def ms_time(call: bytes) -> tuple[int, int, int]:
+    sec = 2 * call[0] % 0x10
+    minute = call[0] // 0x10 + 0x10 * call[1] % 0x4
+    hour = call[1] // 0x4
+    return hour, minute, sec
+
+
+def ms_date(call: bytes):
+    day = 2 * call[0] % 0x10
+    month = call[0] // 0x10
+    year = 1980 + call[1]
+    return year, month, day
+
+
 @dataclasses.dataclass
 class file_entry:
     name: str  # 8
@@ -75,15 +89,16 @@ class file_entry:
     def __init__(self, file: bytes):
         self.name = str(file[:8])
         self.ext = str(file[8:0xB])
-        self.create_datetime = datetime.datetime(file[0xE:0x12])
-        self.access_date = datetime.date(file[0x12:0x14])
-        self.create_datetime = datetime.datetime(file[0x16:0x1A])
+        self.create_datetime = datetime.datetime(*ms_date(file[0xE:0x10]), *ms_time(file[0x10:0x12]))
+        self.access_date = datetime.date(*ms_date(file[0x12:0x14]))
+        self.create_datetime = datetime.datetime(*ms_date(file[0x16:0x18]), *ms_time(file[0x18:0x1A]))
         self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
+
 def root_dir_factory(disk: disk_t):
     dir = []
-    
+
 
 class DiskReadError(Exception):
     def __init__(self, code, back):
