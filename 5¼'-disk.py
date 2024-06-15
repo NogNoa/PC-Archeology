@@ -37,17 +37,35 @@ class Disk:
 class DiskStruct:
     fat_id: int
     track_sz: int
+    track_sects: int
     cluster_sz: int
+    cluster_sects: int
     root_dir_sz: int
-    root_dir_sectors: int
+    root_dir_entries: int
+    root_dir_sects: int
 
     def __init__(self, fat_id):
         self.fat_id = fat_id
-        fat_index = 0xff - self.fat_id
-        self.track_sz = Track_Sectors[fat_index] * Sector_sz
-        self.cluster_sz = Cluster_Sectors[fat_index] * Sector_sz
-        self.root_dir_sz = Root_Dir_Entries[fat_index] * 0x20
-        self.root_dir_sectors = Root_Dir_Entries[fat_index] // 0x10
+        fat_index = 0xff - fat_id
+        self.track_sects = Track_Sectors[fat_index]
+        self.cluster_sects = Cluster_Sectors[fat_index]
+        self.root_dir_entries = Root_Dir_Entries[fat_index]
+
+    @property
+    def track_sz(self):
+        return self.track_sects * Sector_sz
+
+    @property
+    def cluster_sz(self):
+        return self.cluster_sects * Sector_sz
+
+    @property
+    def root_dir_sz(self):
+        return self.root_dir_entries * Dir_Entry_sz
+
+    @property
+    def root_dir_sects(self):
+        return self.root_dir_entries  // 0x10
 
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
@@ -109,9 +127,10 @@ class file_entry:
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
 
-def root_dir_factory(disk: disk_t):
-    dir = []
-
+def root_dir_factory(disk: disk_t, struct: DiskStruct):
+    dir_floor = 1 + Fat_Numb
+    root_dir = disk[dir_floor: dir_floor + struct.root_dir_sects]
+    root_dir = sum([root_dir[i: i+Dir_Entry_sz] for i in range(struct.root_dir_entries)], [])
 
 class DiskReadError(Exception):
     def __init__(self, code, back):
