@@ -14,6 +14,7 @@ Track_Sectors = (8, 8, 9, 9)
 Heads = (2, 1, 2, 1)
 Cluster_Sectors = (2, 1, 2, 1)
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
+Dir_Entry_sz = 0x20
 
 disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
@@ -27,14 +28,26 @@ class Disk:
         self.boot = val[0]
         assert val[1] == val[2]
         fat = val[1]
-        self.fat_id = fat[0]
-        fat_index = 0xff - self.fat_id
-        self.track_sz = Track_Sectors[fat_index] * Sector_sz
-        self.cluster_sz = Cluster_Sectors * Sector_sz
-        self.root_dir_sz = Root_Dir_Entries[fat_index] * 0x20
-        self.root_dir_sectors = Root_Dir_Entries[fat_index] // 0x10
+        self.struct = DiskStruct(fat[0])
         self.fat = fat12_factory(fat)
         self.root_dir = root_dir_factory(val)
+
+
+@dataclasses.dataclass
+class DiskStruct:
+    fat_id: int
+    track_sz: int
+    cluster_sz: int
+    root_dir_sz: int
+    root_dir_sectors: int
+
+    def __init__(self, fat_id):
+        self.fat_id = fat_id
+        fat_index = 0xff - self.fat_id
+        self.track_sz = Track_Sectors[fat_index] * Sector_sz
+        self.cluster_sz = Cluster_Sectors[fat_index] * Sector_sz
+        self.root_dir_sz = Root_Dir_Entries[fat_index] * 0x20
+        self.root_dir_sectors = Root_Dir_Entries[fat_index] // 0x10
 
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
