@@ -65,7 +65,7 @@ class DiskStruct:
 
     @property
     def root_dir_sects(self):
-        return self.root_dir_entries  // 0x10
+        return self.root_dir_entries // 0x10
 
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
@@ -130,7 +130,9 @@ class file_entry:
 def root_dir_factory(disk: disk_t, struct: DiskStruct):
     dir_floor = 1 + Fat_Numb
     root_dir = disk[dir_floor: dir_floor + struct.root_dir_sects]
-    root_dir = sum([root_dir[i: i+Dir_Entry_sz] for i in range(struct.root_dir_entries)], [])
+    for sector in root_dir:
+        sector = [sector[i * Dir_Entry_sz: (i + 1) * Dir_Entry_sz] for i in range(Sector_sz // Dir_Entry_sz)]
+
 
 class DiskReadError(Exception):
     def __init__(self, code, back):
