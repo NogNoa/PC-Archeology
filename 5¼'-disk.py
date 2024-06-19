@@ -22,26 +22,27 @@ loc_t = list[int]
 
 
 class Disk:
-    def __init__(self, *args):
-        val = disk_factory(*args)
+    def __init__(self, *args, **qwargs):
+        val = disk_factory(*args, **qwargs)
         self.val = val
         self.boot = val[0]
         assert val[1] == val[2]
         fat = val[1]
         self.struct = DiskStruct(fat[0])
         self.fat = fat12_factory(fat)
-        self.root_dir = root_dir_factory(val)
+        self.root_dir = root_dir_factory(val, self.struct)
 
 
 @dataclasses.dataclass
 class DiskStruct:
     fat_id: int
-    track_sz: int
     track_sects: int
-    cluster_sz: int
     cluster_sects: int
-    root_dir_sz: int
     root_dir_entries: int
+
+    track_sz: int
+    cluster_sz: int
+    root_dir_sz: int
     root_dir_sects: int
 
     def __init__(self, fat_id):
@@ -127,11 +128,14 @@ class file_entry:
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
 
-def root_dir_factory(disk: disk_t, struct: DiskStruct):
+def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[bytes, ...]:
     dir_floor = 1 + Fat_Numb
-    root_dir = disk[dir_floor: dir_floor + struct.root_dir_sects]
-    for sector in root_dir:
-        sector = [sector[i * Dir_Entry_sz: (i + 1) * Dir_Entry_sz] for i in range(Sector_sz // Dir_Entry_sz)]
+    root_dir_on_disk = disk[dir_floor: dir_floor + struct.root_dir_sects]
+    root_dir = []
+    for sector in root_dir_on_disk:
+        entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
+        root_dir.append(entry)
+    return tuple(root_dir)
 
 
 class DiskReadError(Exception):
@@ -198,11 +202,9 @@ file_add
 format
 """
 
-disk = disk_factory(
+disk = Disk(
     r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\IBM PC-DOS 1.10 (5.25-160k)\Images\Raw\DISK01.IMA",
     read_only=True)
-
-fat12 = fat12_factory(disk[1])
-fili, emp = fili_locate(fat12)
+fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
