@@ -103,14 +103,14 @@ def fat12_factory(sector: bytes) -> fat_t:
 
 def ms_time(call: bytes) -> tuple[int, int, int]:
     sec = 2 * call[0] % 0x10
-    minute = call[0] // 0x10 + 0x10 * call[1] % 0x4
-    hour = call[1] // 0x4
+    minute = call[0] // 0x10 + 0x10 * call[1] % 4
+    hour = call[1] // 4
     return hour, minute, sec
 
 
 def ms_date(call: bytes):
-    day = 2 * call[0] % 0x10
-    month = call[0] // 0x10
+    day = call[0] % 0x10 or 1
+    month = call[0] // 0x10 or 1
     year = 1980 + call[1]
     return year, month, day
 
@@ -132,7 +132,7 @@ class file_entry:
         self.ext = str(file[8:0xB])
         self.create_datetime = datetime.datetime(*ms_date(file[0xE:0x10]), *ms_time(file[0x10:0x12]))
         self.access_date = datetime.date(*ms_date(file[0x12:0x14]))
-        self.create_datetime = datetime.datetime(*ms_date(file[0x16:0x18]), *ms_time(file[0x18:0x1A]))
+        self.write_datetime = datetime.datetime(*ms_date(file[0x16:0x18]), *ms_time(file[0x18:0x1A]))
         self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
@@ -144,7 +144,14 @@ def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[file_entry, ...]
     for sector in root_dir_on_disk:
         while sector:
             entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
+            if entry[0] == 0xe5:
+                continue
+            elif entry[0] == 0:
+                break
             root_dir.append(entry)
+        else:
+            continue
+        break
     root_dir = [file_entry(entry) for entry in root_dir]
     return tuple(root_dir)
 
