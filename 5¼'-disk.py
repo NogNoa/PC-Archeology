@@ -48,7 +48,10 @@ class DiskStruct:
     def __init__(self, fat_id):
         self.fat_id = fat_id
         fat_index = 0xff - fat_id
-        self.track_sects = Track_Sectors[fat_index]
+        try:
+            self.track_sects = Track_Sectors[fat_index]
+        except IndexError as err:
+            raise Fat_ID_Error(fat_id) from err
         self.cluster_sects = Cluster_Sectors[fat_index]
         self.root_dir_entries = Root_Dir_Entries[fat_index]
 
@@ -67,6 +70,12 @@ class DiskStruct:
     @property
     def root_dir_sects(self):
         return self.root_dir_entries // 0x10
+
+
+class Fat_ID_Error(Exception):
+    def __init__(self, fat_id):
+        message = f"Fat ID {fat_id} is invalid out of scope due to modernity"
+        super().__init__(message)
 
 
 def disk_factory(scroll_nom: str, read_only) -> disk_t:
@@ -128,13 +137,15 @@ class file_entry:
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
 
-def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[bytes, ...]:
+def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[file_entry, ...]:
     dir_floor = 1 + Fat_Numb
     root_dir_on_disk = disk[dir_floor: dir_floor + struct.root_dir_sects]
     root_dir = []
     for sector in root_dir_on_disk:
-        entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
-        root_dir.append(entry)
+        while sector:
+            entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
+            root_dir.append(entry)
+    root_dir = [file_entry(entry) for entry in root_dir]
     return tuple(root_dir)
 
 
@@ -208,3 +219,4 @@ disk = Disk(
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
+print(disk.root_dir)
