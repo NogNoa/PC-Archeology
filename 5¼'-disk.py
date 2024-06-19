@@ -22,8 +22,8 @@ loc_t = list[int]
 
 
 class Disk:
-    def __init__(self, *args, **qwargs):
-        val = disk_factory(*args, **qwargs)
+    def __init__(self, *args, **kwargs):
+        val = disk_factory(*args, **kwargs)
         self.val = val
         self.boot = val[0]
         assert val[1] == val[2]
@@ -101,18 +101,17 @@ def fat12_factory(sector: bytes) -> fat_t:
     return tuple(table)
 
 
-def ms_time(call: bytes) -> tuple[int, int, int]:
-    sec = 2 * call[0] % 0x10
-    minute = call[0] // 0x10 + 0x10 * call[1] % 4
-    hour = call[1] // 4
-    return hour, minute, sec
+def ms_time(call: bytes) -> dict[str, int]:
+    return {'second': 2 * call[0] % 0x20,  # 0..5
+            'minute': call[0] // 0x20 + 0x20 * call[1] % 8,  # 5..11
+            'hour': call[1] // 8 - 1 if call[1] else call[1]}  # 11..16
+    # hour need to be converted from 0..25 (0 being dummy) on fat to 0..24 on python
 
 
-def ms_date(call: bytes):
-    day = call[0] % 0x10 or 1
-    month = call[0] // 0x10 or 1
-    year = 1980 + call[1]
-    return year, month, day
+def ms_date(call: bytes) -> dict[str, int]:
+    return {'day': call[0] % 0x20 or 1,  # 0..5
+            'month': call[0] // 0x20 + 0x20 * call[1] % 2 or 1,  # 5..9
+            'year': 1980 + call[1] // 2}  # 9..16
 
 
 @dataclasses.dataclass
@@ -130,9 +129,9 @@ class file_entry:
     def __init__(self, file: bytes):
         self.name = str(file[:8])
         self.ext = str(file[8:0xB])
-        self.create_datetime = datetime.datetime(*ms_date(file[0xE:0x10]), *ms_time(file[0x10:0x12]))
-        self.access_date = datetime.date(*ms_date(file[0x12:0x14]))
-        self.write_datetime = datetime.datetime(*ms_date(file[0x16:0x18]), *ms_time(file[0x18:0x1A]))
+        self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
+        self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
+        self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
         self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
@@ -226,4 +225,4 @@ disk = Disk(
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
-print(disk.root_dir)
+print("\n".join(str(entry) for entry in disk.root_dir))
