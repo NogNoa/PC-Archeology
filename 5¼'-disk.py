@@ -12,6 +12,7 @@ First_Physical_sector = 1  # under CHS
 Capacity = (320, 160, 360, 180)  # in KB
 Track_Sectors = (8, 8, 9, 9)
 Heads = (2, 1, 2, 1)
+Fat_Sectors = (1, 1, 2, 2)
 Cluster_Sectors = (2, 1, 2, 1)
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
 Dir_Entry_sz = 0x20
@@ -26,10 +27,10 @@ class Disk:
         val = disk_factory(*args, **kwargs)
         self.val = val
         self.boot = val[0]
-        assert val[1] == val[2]
-        fat = val[1]
-        self.struct = DiskStruct(fat[0])
-        self.fat = fat12_factory(fat)
+        self.struct = DiskStruct(val[1][0])
+        fat = val[1:1 + self.struct.fat_sects]
+        assert fat == val[1 + self.struct.fat_sects: 1 + 2 * self.struct.fat_sects]
+        self.fat = fat12_factory(sum(fat, b''), self.struct.fat_sz)
         self.root_dir = root_dir_factory(val, self.struct)
 
     def dir(self):
@@ -42,10 +43,12 @@ class Disk:
 @dataclasses.dataclass
 class DiskStruct:
     fat_id: int
+    fat_sects: int
     track_sects: int
     cluster_sects: int
     root_dir_entries: int
 
+    fat_sz: int
     track_sz: int
     cluster_sz: int
     root_dir_sz: int
@@ -55,11 +58,16 @@ class DiskStruct:
         self.fat_id = fat_id
         fat_index = 0xff - fat_id
         try:
-            self.track_sects = Track_Sectors[fat_index]
+            self.fat_sects = Fat_Sectors[fat_index]
         except IndexError as err:
             raise Fat_ID_Error(fat_id) from err
+        self.track_sects = Track_Sectors[fat_index]
         self.cluster_sects = Cluster_Sectors[fat_index]
         self.root_dir_entries = Root_Dir_Entries[fat_index]
+
+    @property
+    def fat_sz(self):
+        return self.fat_sects * Sector_sz
 
     @property
     def track_sz(self):
@@ -95,11 +103,12 @@ def disk_factory(scroll_nom: str, read_only) -> disk_t:
     return tuple(disk)
 
 
-def fat12_factory(sector: bytes) -> fat_t:
+def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
     table = []
-    sector, last = sector[:-2], sector[-2:]  # 0x200 % 3 = 2
-    while sector:
-        entrii, sector = sector[:3], sector[3:]
+    end = fat_sz % 3
+    buffer, last = buffer[:-end], buffer[-end:]  # 0x200 % 3 = 2
+    while buffer:
+        entrii, buffer = buffer[:3], buffer[3:]
         # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
@@ -226,7 +235,7 @@ format
 """
 
 disk = Disk(
-    r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\IBM PC-DOS 1.10 (5.25-160k)\Images\Raw\DISK01.IMA",
+    r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\Lattice C 2.15 for DOS (1985) (5.25)\disk01.img",
     read_only=True)
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
