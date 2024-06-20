@@ -32,6 +32,12 @@ class Disk:
         self.fat = fat12_factory(fat)
         self.root_dir = root_dir_factory(val, self.struct)
 
+    def dir(self):
+        back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
+        back = ("\t".join(str(v) for v in e) for e in back)
+        print("\n".join(back))
+        print(f"{len(self.root_dir)} Files(s)")
+
 
 @dataclasses.dataclass
 class DiskStruct:
@@ -127,8 +133,8 @@ class file_entry:
     size: int  # 4
 
     def __init__(self, file: bytes):
-        self.name = str(file[:8])
-        self.ext = str(file[8:0xB])
+        self.name = str(file[:8], encoding="ansi")
+        self.ext = str(file[8:0xB], encoding="ansi")
         self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
         self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
         self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
@@ -225,4 +231,4 @@ disk = Disk(
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
-print("\n".join(str(entry) for entry in disk.root_dir))
+disk.dir()
