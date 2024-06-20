@@ -30,7 +30,7 @@ class Disk:
         self.struct = DiskStruct(val[1][0])
         fat = val[1:1 + self.struct.fat_sects]
         assert fat == val[1 + self.struct.fat_sects: 1 + 2 * self.struct.fat_sects]
-        self.fat = fat12_factory(sum(fat, b''), self.struct.fat_sz)
+        self.fat = fat12_factory(b''.join(fat), self.struct.fat_sz)
         self.root_dir = root_dir_factory(val, self.struct)
 
     def dir(self):
@@ -106,13 +106,19 @@ def disk_factory(scroll_nom: str, read_only) -> disk_t:
 def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
     table = []
     end = fat_sz % 3
-    buffer, last = buffer[:-end], buffer[-end:]  # 0x200 % 3 = 2
+    buffer, last = buffer[:-end], buffer[-end:]
     while buffer:
         entrii, buffer = buffer[:3], buffer[3:]
         # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
-    table.append(last[0] + 0x100 * (last[1] % 0x10))
+    try:
+        table.append(last[0] + 0x100 * (last[1] % 0x10))
+    except IndexError:
+        try:
+            table.append(last[0])
+        except IndexError:
+            pass
     return tuple(table)
 
 
