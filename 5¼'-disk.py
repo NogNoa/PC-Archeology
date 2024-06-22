@@ -60,7 +60,10 @@ class Disk:
         fat = val[1:1 + self.struct.fat_sects]
         assert fat == val[1 + self.struct.fat_sects: 1 + 2 * self.struct.fat_sects]
         self.fat = fat12_factory(b''.join(fat), self.struct.fat_sz)
-        self.root_dir = root_dir_factory(val, self.struct)
+        root_dir_floor = 1 + Fat_Numb * self.struct.fat_sects
+        root_dir = self.val[root_dir_floor: root_dir_floor + self.struct.root_dir_sects]
+        self.root_dir = root_dir_factory(root_dir)
+        self.files_floor = root_dir_floor + self.struct.root_dir_sects
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -161,11 +164,9 @@ def ms_date(call: bytes) -> dict[str, int]:
             'year': 1980 + call[1] // 2}  # 9..16
 
 
-def root_dir_factory(disk: disk_t, struct: DiskStruct) -> dir_t:
-    dir_floor = 1 + Fat_Numb * struct.fat_sects
-    root_dir_on_disk = disk[dir_floor: dir_floor + struct.root_dir_sects]
+def root_dir_factory(dir_on_disk: disk_t) -> dir_t:
     root_dir = []
-    for sector in root_dir_on_disk:
+    for sector in dir_on_disk:
         while sector:
             entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
             if entry[0] == 0xe5:
@@ -210,9 +211,10 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: disk_t, fat: fat_t, pointer: int) -> bytes:
+def file_get(disk: disk_t, fat: fat_t, pointer: int, files_floor: int) -> bytes:
     file = file_locate(fat, pointer)
-    return b"".join(disk[i] for i in file)
+    files_on_disk = disk[files_floor:]
+    return b"".join(files_on_disk[i] for i in file)
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
@@ -236,14 +238,14 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
     return fili, empty
 
 
-def file_first_get(folder: dir_t, nom: str) -> int:
+def file_first_sector_get(folder: dir_t, nom: str, cluster_sects: int) -> int:
     nom = nom.upper()
     try:
         entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
     except IndexError:
         print(f"file {nom} doesn't exist", sys.stderr)
         raise
-    return entry.first_cluster
+    return entry.first_cluster * cluster_sects
 
 
 """
@@ -261,4 +263,5 @@ fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
-print(file_get(disk.val, disk.fat, file_first_get(disk.root_dir, "c.asm")))
+print(file_get(disk.val, disk.fat, file_first_sector_get(disk.root_dir, "c.asm", disk.struct.cluster_sects),
+               disk.files_floor))
