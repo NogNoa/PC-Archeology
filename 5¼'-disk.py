@@ -13,7 +13,7 @@ Capacity = (320, 160, 360, 180)  # in KB
 Track_Sectors = (8, 8, 9, 9)
 Heads = (2, 1, 2, 1)
 Fat_Sectors = (1, 1, 2, 2)
-Cluster_Sectors = (2, 1, 2, 1)
+Cluster_Sectors = (2, 1, 2, 1)  # virtual cluster in physical sectors
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
 Dir_Entry_sz = 0x20
 
@@ -112,13 +112,10 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
         # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
-    try:
+    if end == 2:
         table.append(last[0] + 0x100 * (last[1] % 0x10))
-    except IndexError:
-        try:
-            table.append(last[0])
-        except IndexError:
-            pass
+    elif end == 1:
+        table.append(last[0])
     return tuple(table)
 
 
@@ -158,7 +155,7 @@ class file_entry:
 
 
 def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[file_entry, ...]:
-    dir_floor = 1 + Fat_Numb
+    dir_floor = 1 + Fat_Numb * struct.fat_sects
     root_dir_on_disk = disk[dir_floor: dir_floor + struct.root_dir_sects]
     root_dir = []
     for sector in root_dir_on_disk:
