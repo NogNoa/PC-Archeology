@@ -58,12 +58,11 @@ class Disk:
         self.boot = val[0]
         self.struct = DiskStruct(val[1][0])
         fat = val[1:1 + self.struct.fat_sects]
-        assert fat == val[1 + self.struct.fat_sects: 1 + 2 * self.struct.fat_sects]
+        root_dir_floor = self.struct.root_dir_floor
+        assert fat == val[self.struct.second_fat_floor: root_dir_floor]
         self.fat = fat12_factory(b''.join(fat), self.struct.fat_sz)
-        root_dir_floor = 1 + Fat_Numb * self.struct.fat_sects
-        root_dir = self.val[root_dir_floor: root_dir_floor + self.struct.root_dir_sects]
+        root_dir = self.val[root_dir_floor: self.struct.files_floor]
         self.root_dir = root_dir_factory(root_dir)
-        self.files_floor = root_dir_floor + self.struct.root_dir_sects
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -116,6 +115,18 @@ class DiskStruct:
     @property
     def root_dir_sects(self):
         return self.root_dir_entries // 0x10
+
+    @property
+    def second_fat_floor(self):
+        return 1 + self.fat_sects
+
+    @property
+    def root_dir_floor(self):
+        return 1 + Fat_Numb * self.fat_sects
+
+    @property
+    def files_floor(self):
+        return self.root_dir_floor + self.root_dir_sects
 
 
 class Fat_ID_Error(Exception):
@@ -269,4 +280,4 @@ print(f"empty: {emp}")
 disk.dir()
 with open(r"D:\temp\c.asm", 'wb') as codex:
     codex.write(file_get(disk.val, disk.fat, file_first_sector_get(disk.root_dir, "c.asm"),
-                         disk.files_floor, disk.struct.cluster_sects))
+                         disk.struct.files_floor, disk.struct.cluster_sects))
