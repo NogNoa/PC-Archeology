@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import sys
 
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
@@ -31,13 +32,17 @@ class file_entry:
     size: int  # 4
 
     def __init__(self, file: bytes):
-        self.name = str(file[:8], encoding="ansi")
-        self.ext = str(file[8:0xB], encoding="ansi")
+        self.name = str(file[:8], encoding="ansi").upper().strip()
+        self.ext = str(file[8:0xB], encoding="ansi").upper().strip()
         self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
         self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
         self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
         self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
+
+    @property
+    def full_name(self):
+        return f"{self.name}.{self.ext}"
 
 
 disk_t = tuple[bytes, ...]
@@ -232,8 +237,14 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
 
 
 def file_first_get(folder: dir_t, nom: str) -> int:
-    entry = filter(lambda n: n.name == nom, folder)[0]
+    nom = nom.upper()
+    try:
+        entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
+    except IndexError:
+        print(f"file {nom} doesn't exist", sys.stderr)
+        raise
     return entry.first_cluster
+
 
 """
 fili_get
@@ -250,3 +261,4 @@ fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
+print(file_get(disk.val, disk.fat, file_first_get(disk.root_dir, "c.asm")))
