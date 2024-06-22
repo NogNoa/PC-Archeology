@@ -17,9 +17,33 @@ Cluster_Sectors = (2, 1, 2, 1)  # virtual cluster in physical sectors
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
 Dir_Entry_sz = 0x20
 
+
+@dataclasses.dataclass
+class file_entry:
+    name: str  # 8
+    ext: str  # 3
+    # 3
+    create_datetime: datetime.datetime  # 4
+    access_date: datetime.date  # 2
+    # 2
+    write_datetime: datetime.datetime  # 4
+    first_cluster: int  # 2
+    size: int  # 4
+
+    def __init__(self, file: bytes):
+        self.name = str(file[:8], encoding="ansi")
+        self.ext = str(file[8:0xB], encoding="ansi")
+        self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
+        self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
+        self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
+        self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
+        self.size = int.from_bytes(file[0x1C:], byteorder='little')
+
+
 disk_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
+dir_t = tuple[file_entry, ...]
 
 
 class Disk:
@@ -132,29 +156,7 @@ def ms_date(call: bytes) -> dict[str, int]:
             'year': 1980 + call[1] // 2}  # 9..16
 
 
-@dataclasses.dataclass
-class file_entry:
-    name: str  # 8
-    ext: str  # 3
-    # 3
-    create_datetime: datetime.datetime  # 4
-    access_date: datetime.date  # 2
-    # 2
-    write_datetime: datetime.datetime  # 4
-    first_cluster: int  # 2
-    size: int  # 4
-
-    def __init__(self, file: bytes):
-        self.name = str(file[:8], encoding="ansi")
-        self.ext = str(file[8:0xB], encoding="ansi")
-        self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
-        self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
-        self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
-        self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
-        self.size = int.from_bytes(file[0x1C:], byteorder='little')
-
-
-def root_dir_factory(disk: disk_t, struct: DiskStruct) -> tuple[file_entry, ...]:
+def root_dir_factory(disk: disk_t, struct: DiskStruct) -> dir_t:
     dir_floor = 1 + Fat_Numb * struct.fat_sects
     root_dir_on_disk = disk[dir_floor: dir_floor + struct.root_dir_sects]
     root_dir = []
@@ -203,7 +205,7 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: disk_t, fat: fat_t, pointer: int):
+def file_get(disk: disk_t, fat: fat_t, pointer: int) -> bytes:
     file = file_locate(fat, pointer)
     return b"".join(disk[i] for i in file)
 
@@ -228,6 +230,10 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
         unchecked -= set(rem)
     return fili, empty
 
+
+def file_first_get(folder: dir_t, nom: str) -> int:
+    entry = filter(lambda n: n.name == nom, folder)[0]
+    return entry.first_cluster
 
 """
 fili_get
