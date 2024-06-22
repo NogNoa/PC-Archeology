@@ -211,10 +211,14 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: disk_t, fat: fat_t, pointer: int, files_floor: int) -> bytes:
+def file_get(disk: disk_t, fat: fat_t, pointer: int, files_floor: int, cluster_sects) -> bytes:
     file = file_locate(fat, pointer)
     files_on_disk = disk[files_floor:]
-    return b"".join(files_on_disk[i] for i in file)
+    back = []
+    for i in file:
+        i = (i - 2) * cluster_sects
+        back += files_on_disk[i:i + cluster_sects]
+    return b"".join(back).strip(b"\xF6").strip(b"\x00")
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
@@ -238,14 +242,14 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
     return fili, empty
 
 
-def file_first_sector_get(folder: dir_t, nom: str, cluster_sects: int) -> int:
+def file_first_sector_get(folder: dir_t, nom: str) -> int:
     nom = nom.upper()
     try:
         entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
     except IndexError:
         print(f"file {nom} doesn't exist", sys.stderr)
         raise
-    return entry.first_cluster * cluster_sects
+    return entry.first_cluster
 
 
 """
@@ -263,5 +267,6 @@ fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
-print(file_get(disk.val, disk.fat, file_first_sector_get(disk.root_dir, "c.asm", disk.struct.cluster_sects),
-               disk.files_floor))
+with open(r"D:\temp\c.asm", 'wb') as codex:
+    codex.write(file_get(disk.val, disk.fat, file_first_sector_get(disk.root_dir, "c.asm"),
+                         disk.files_floor, disk.struct.cluster_sects))
