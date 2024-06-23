@@ -256,21 +256,30 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
     return fili, empty
 
 
-def file_in_folder_get(folder: dir_t, nom: str) -> tuple[int, int]:
+def file_entry_from_name(folder: dir_t, nom: str) -> file_entry:
     nom = nom.upper()
     try:
         entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
     except IndexError:
         print(f"file {nom} doesn't exist", sys.stderr)
         raise
-    return entry.first_cluster, entry.size
+    return entry
+
+
+def file_entry_from_pointer(folder: dir_t, pointer: int) -> file_entry:
+    try:
+        entry = tuple(filter(lambda e: pointer == e.first_cluster, folder))[0]
+    except IndexError:
+        print(f"file not identified for cluster {pointer}", sys.stderr)
+        raise
+    return entry
 
 
 def file_extract(disk: Disk, path: pathlib.Path, nom: str):
-    pointer, size = file_in_folder_get(disk.root_dir, nom)
-    file = file_locate(disk.fat, pointer)
+    entry = file_entry_from_name(disk.root_dir, nom)
+    file = file_locate(disk.fat, entry.first_cluster)
     with open(path.parent / nom, 'wb') as codex:
-        codex.write(file_get(disk.img, disk.struct, file, size))
+        codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
 def fili_extract(disk: Disk, path: pathlib.Path):
@@ -280,8 +289,8 @@ def fili_extract(disk: Disk, path: pathlib.Path):
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for pl, file in enumerate(fili):
-        with open(folder / str(pl), 'wb') as codex:
+    for file in fili:
+        with open(folder / str(file[0]), 'wb') as codex:
             codex.write(file_get(disk.img, disk.struct, file))
 
 
