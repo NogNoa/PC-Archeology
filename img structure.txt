@@ -135,6 +135,11 @@ define.dat = img[48000:48400]
 define.exe = img[48400:4AE80]
 	define.exe[295d:] = 0
 
+img[47600:47718] = img[47718:47800] = 0
+img[47718] = 2C
+
+img[47800:47900] = 1FDF0
+/* root directory identify img[47800:47900] as a file exit.lib */
 
 diskcomp.com = img[4B000:4B744]
 img[4B744:4B7E6] = diskcomp[56C:60E]

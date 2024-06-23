@@ -228,7 +228,7 @@ def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
-        i = (i - 2) * struct.cluster_sects
+        i = (i - Fat_Numb) * struct.cluster_sects  # at least true for Fat_Numb == 2
         back += files_img[i:i + struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
@@ -270,7 +270,7 @@ def file_entry_from_pointer(folder: dir_t, pointer: int) -> file_entry:
     try:
         entry = tuple(filter(lambda e: pointer == e.first_cluster, folder))[0]
     except IndexError:
-        print(f"file not identified for cluster {pointer}", sys.stderr)
+        print(f"file not identified for cluster {pointer}", file=sys.stderr)
         raise
     return entry
 
@@ -289,9 +289,10 @@ def fili_extract(disk: Disk, path: pathlib.Path):
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for file in fili:
-        with open(folder / str(file[0]), 'wb') as codex:
-            codex.write(file_get(disk.img, disk.struct, file))
+    for file in fili[1:]:  # at least correct for Reserved_Sectors == 1
+        entry = file_entry_from_pointer(disk.root_dir, file[0])
+        with open(folder / entry.full_name, 'wb') as codex:
+            codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
 """
@@ -302,8 +303,8 @@ file_add
 format
 """
 
-scroll = pathlib.Path(r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\Microsoft MS-DOS 1.25 [CDP OEM R2.11] "
-                      r"and Basic (5.25)\Images\CDPDOS.IMG")
+scroll = pathlib.Path(r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks"
+                      r"\Lattice C 2.15 for DOS (1985) (5.25)\disk01.img")
 
 disk = Disk(scroll, read_only=True)
 fili, emp = fili_locate(disk.fat)
