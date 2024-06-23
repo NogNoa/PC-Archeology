@@ -45,7 +45,7 @@ class file_entry:
         return f"{self.name}.{self.ext}"
 
 
-disk_t = tuple[bytes, ...]
+image_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
 dir_t = tuple[file_entry, ...]
@@ -53,15 +53,13 @@ dir_t = tuple[file_entry, ...]
 
 class Disk:
     def __init__(self, *args, **kwargs):
-        val = disk_factory(*args, **kwargs)
-        self.val = val
-        self.boot = val[0]
-        self.struct = DiskStruct(val[1][0])
-        fat = val[1:1 + self.struct.fat_sects]
-        root_dir_floor = self.struct.root_dir_floor
-        assert fat == val[self.struct.second_fat_floor: root_dir_floor]
-        self.fat = fat12_factory(b''.join(fat), self.struct.fat_sz)
-        root_dir = self.val[root_dir_floor: self.struct.files_floor]
+        self.img = img = disk_factory(*args, **kwargs)
+        self.boot = img[0]
+        self.struct = struct = DiskStruct(img[1][0])
+        fat = img[1:1 + struct.fat_sects]
+        assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
+        self.fat = fat12_factory(b''.join(fat), struct.fat_sz)
+        root_dir = self.img[struct.root_dir_floor: struct.files_floor]
         self.root_dir = root_dir_factory(root_dir)
 
     def dir(self):
@@ -135,7 +133,7 @@ class Fat_ID_Error(Exception):
         super().__init__(message)
 
 
-def disk_factory(scroll_nom: str, read_only) -> disk_t:
+def disk_factory(scroll_nom: str, read_only) -> image_t:
     mode = "br" if read_only else "br+"
     with open(scroll_nom, mode) as file:
         scroll = file.read()
@@ -175,7 +173,7 @@ def ms_date(call: bytes) -> dict[str, int]:
             'year': 1980 + call[1] // 2}  # 9..16
 
 
-def root_dir_factory(dir_on_disk: disk_t) -> dir_t:
+def root_dir_factory(dir_on_disk: image_t) -> dir_t:
     root_dir = []
     for sector in dir_on_disk:
         while sector:
@@ -222,7 +220,7 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: disk_t, fat: fat_t, pointer: int, files_floor: int, cluster_sects) -> bytes:
+def file_get(disk: image_t, fat: fat_t, pointer: int, files_floor: int, cluster_sects) -> bytes:
     file = file_locate(fat, pointer)
     files_on_disk = disk[files_floor:]
     back = []
@@ -253,7 +251,7 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
     return fili, empty
 
 
-def file_first_sector_get(folder: dir_t, nom: str) -> int:
+def file_pointer_get(folder: dir_t, nom: str) -> int:
     nom = nom.upper()
     try:
         entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
@@ -279,5 +277,5 @@ print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
 with open(r"D:\temp\c.asm", 'wb') as codex:
-    codex.write(file_get(disk.val, disk.fat, file_first_sector_get(disk.root_dir, "c.asm"),
+    codex.write(file_get(disk.img, disk.fat, file_pointer_get(disk.root_dir, "c.asm"),
                          disk.struct.files_floor, disk.struct.cluster_sects))
