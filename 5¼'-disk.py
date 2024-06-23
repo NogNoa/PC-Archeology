@@ -223,13 +223,12 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: Disk, pointer: int, size: Optional[int] = None) -> bytes:
-    file = file_locate(disk.fat, pointer)
-    files_img = disk.img[disk.struct.files_floor:]
+def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
+    files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
-        i = (i - 2) * disk.struct.cluster_sects
-        back += files_img[i:i + disk.struct.cluster_sects]
+        i = (i - 2) * struct.cluster_sects
+        back += files_img[i:i + struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
     return back
@@ -267,8 +266,10 @@ def file_in_folder_get(folder: dir_t, nom: str) -> tuple[int, int]:
 
 
 def file_extract(disk: Disk, nom: str, path: pathlib.Path):
+    pointer, size = file_in_folder_get(disk.root_dir, nom)
+    file = file_locate(disk.fat, pointer)
     with open(path.parent / nom, 'wb') as codex:
-        codex.write(file_get(disk, *file_in_folder_get(disk.root_dir, nom)))
+        codex.write(file_get(disk.img, disk.struct, file, size))
 
 
 """
@@ -282,9 +283,7 @@ format
 scroll = pathlib.Path(r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\Microsoft MS-DOS 1.25 [CDP OEM R2.11] "
                       r"and Basic (5.25)\Images\CDPDOS.IMG")
 
-disk = Disk(
-    scroll,
-    read_only=True)
+disk = Disk(scroll, read_only=True)
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
