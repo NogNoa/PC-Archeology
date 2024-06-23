@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import pathlib
 import sys
 
 Sector_sz = 0x200
@@ -161,9 +162,10 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
 
 
 def ms_time(call: bytes) -> dict[str, int]:
+    hour = call[1] // 8  # 11..16
     return {'second': 2 * call[0] % 0x20,  # 0..5
             'minute': call[0] // 0x20 + 0x20 * call[1] % 8,  # 5..11
-            'hour': call[1] // 8 - 1 if call[1] else call[1]}  # 11..16
+            'hour': hour - 1 if hour else hour}
     # hour need to be converted from 0..25 (0 being dummy) on fat to 0..24 on python
 
 
@@ -261,6 +263,12 @@ def file_pointer_get(folder: dir_t, nom: str) -> int:
     return entry.first_cluster
 
 
+def file_extract(disk: Disk, nom: str, path: pathlib.Path):
+    with open(path.parent / nom, 'wb') as codex:
+        codex.write(file_get(disk.img, disk.fat, file_pointer_get(disk.root_dir, nom),
+                             disk.struct.files_floor, disk.struct.cluster_sects))
+
+
 """
 fili_get
 file_firsti_get
@@ -269,13 +277,14 @@ file_add
 format
 """
 
+scroll = pathlib.Path(r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\Microsoft MS-DOS 1.25 [CDP OEM R2.11] "
+                      r"and Basic (5.25)\Images\CDPDOS.IMG")
+
 disk = Disk(
-    r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks\Lattice C 2.15 for DOS (1985) (5.25)\disk01.img",
+    scroll,
     read_only=True)
 fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
-with open(r"D:\temp\c.asm", 'wb') as codex:
-    codex.write(file_get(disk.img, disk.fat, file_pointer_get(disk.root_dir, "c.asm"),
-                         disk.struct.files_floor, disk.struct.cluster_sects))
+file_extract(disk, "ibmbio.com", scroll)

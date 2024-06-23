@@ -190,6 +190,7 @@ log_phy_table = {
 }
 
 log_py = λ x. 2x+6
+log_adress = x. 100(4x+C)
 
 /*
 format /S copies com files imbbio, ibmdos and commmand, for absolute minimal dos.
