@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import os
 import pathlib
 import sys
 from typing import Optional
@@ -265,11 +266,23 @@ def file_in_folder_get(folder: dir_t, nom: str) -> tuple[int, int]:
     return entry.first_cluster, entry.size
 
 
-def file_extract(disk: Disk, nom: str, path: pathlib.Path):
+def file_extract(disk: Disk, path: pathlib.Path, nom: str):
     pointer, size = file_in_folder_get(disk.root_dir, nom)
     file = file_locate(disk.fat, pointer)
     with open(path.parent / nom, 'wb') as codex:
         codex.write(file_get(disk.img, disk.struct, file, size))
+
+
+def fili_extract(disk: Disk, path: pathlib.Path):
+    fili, _ = fili_locate(disk.fat)
+    folder = path.parent / path.stem
+    try:
+        os.mkdir(folder)
+    except FileExistsError:
+        pass
+    for pl, file in enumerate(fili):
+        with open(folder / str(pl), 'wb') as codex:
+            codex.write(file_get(disk.img, disk.struct, file))
 
 
 """
@@ -288,4 +301,4 @@ fili, emp = fili_locate(disk.fat)
 print("\n".join(str(f) for f in fili))
 print(f"empty: {emp}")
 disk.dir()
-file_extract(disk, "ibmbio.com", scroll)
+fili_extract(disk, scroll)
