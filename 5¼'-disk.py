@@ -176,9 +176,9 @@ def ms_date(call: bytes) -> dict[str, int]:
             'year': 1980 + call[1] // 2}  # 9..16
 
 
-def root_dir_factory(dir_on_disk: image_t) -> dir_t:
+def root_dir_factory(dir_img: image_t) -> dir_t:
     root_dir = []
-    for sector in dir_on_disk:
+    for sector in dir_img:
         while sector:
             entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
             if entry[0] == 0xe5:
@@ -223,14 +223,13 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: image_t, fat: fat_t, files_floor: int,
-             cluster_sects, pointer: int, size: Optional[int] = None) -> bytes:
-    file = file_locate(fat, pointer)
-    files_on_disk = disk[files_floor:]
+def file_get(disk: Disk, pointer: int, size: Optional[int] = None) -> bytes:
+    file = file_locate(disk.fat, pointer)
+    files_img = disk.img[disk.struct.files_floor:]
     back = []
     for i in file:
-        i = (i - 2) * cluster_sects
-        back += files_on_disk[i:i + cluster_sects]
+        i = (i - 2) * disk.struct.cluster_sects
+        back += files_img[i:i + disk.struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
     return back
@@ -269,8 +268,7 @@ def file_in_folder_get(folder: dir_t, nom: str) -> tuple[int, int]:
 
 def file_extract(disk: Disk, nom: str, path: pathlib.Path):
     with open(path.parent / nom, 'wb') as codex:
-        codex.write(file_get(disk.img, disk.fat, disk.struct.files_floor,
-                             disk.struct.cluster_sects, *file_in_folder_get(disk.root_dir, nom)))
+        codex.write(file_get(disk, *file_in_folder_get(disk.root_dir, nom)))
 
 
 """
