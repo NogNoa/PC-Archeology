@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import pathlib
 import sys
+from typing import Optional
 
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
@@ -222,14 +223,17 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: image_t, fat: fat_t, pointer: int, files_floor: int, cluster_sects) -> bytes:
+def file_get(disk: image_t, fat: fat_t, pointer: int,
+             files_floor: int, cluster_sects, size: Optional[int] = None) -> bytes:
     file = file_locate(fat, pointer)
     files_on_disk = disk[files_floor:]
     back = []
     for i in file:
         i = (i - 2) * cluster_sects
         back += files_on_disk[i:i + cluster_sects]
-    return b"".join(back).strip(b"\xF6").strip(b"\x00")
+    back = b"".join(back)
+    back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
+    return back
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
