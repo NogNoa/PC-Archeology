@@ -223,8 +223,8 @@ def file_locate(fat: fat_t, first: int) -> loc_t:
     return file
 
 
-def file_get(disk: image_t, fat: fat_t, pointer: int,
-             files_floor: int, cluster_sects, size: Optional[int] = None) -> bytes:
+def file_get(disk: image_t, fat: fat_t, files_floor: int,
+             cluster_sects, pointer: int, size: Optional[int] = None) -> bytes:
     file = file_locate(fat, pointer)
     files_on_disk = disk[files_floor:]
     back = []
@@ -257,20 +257,20 @@ def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
     return fili, empty
 
 
-def file_pointer_get(folder: dir_t, nom: str) -> int:
+def file_in_folder_get(folder: dir_t, nom: str) -> tuple[int, int]:
     nom = nom.upper()
     try:
         entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
     except IndexError:
         print(f"file {nom} doesn't exist", sys.stderr)
         raise
-    return entry.first_cluster
+    return entry.first_cluster, entry.size
 
 
 def file_extract(disk: Disk, nom: str, path: pathlib.Path):
     with open(path.parent / nom, 'wb') as codex:
-        codex.write(file_get(disk.img, disk.fat, file_pointer_get(disk.root_dir, nom),
-                             disk.struct.files_floor, disk.struct.cluster_sects))
+        codex.write(file_get(disk.img, disk.fat, disk.struct.files_floor,
+                             disk.struct.cluster_sects, *file_in_folder_get(disk.root_dir, nom)))
 
 
 """
