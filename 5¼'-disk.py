@@ -8,10 +8,11 @@ from typing import Optional
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
 Cylinders = 40
-# Reserved_Sectors = 1  # this has to be assumed to find fat-id in the first place
+Reserved_Sectors = 1  # this has to be assumed to find fat-id in the first place
 Fat_Numb = 2
 Hidden_Sector_Numb = 0
 First_Physical_sector = 1  # under CHS
+Fat_Offset = Reserved_Sectors + 1
 
 Capacity = (320, 160, 360, 180)  # in KB
 Track_Sectors = (8, 8, 9, 9)
@@ -226,7 +227,7 @@ def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
-        i = (i - Fat_Numb) * struct.cluster_sects  # at least true for Fat_Numb == 2
+        i = (i - Fat_Offset) * struct.cluster_sects
         back += files_img[i:i + struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
@@ -234,7 +235,7 @@ def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
-    unchecked = set(range(Fat_Numb, Fat12_Entries))  # at least true for Fat_Numb == 2
+    unchecked = set(range(Fat_Offset, Fat12_Entries))
     fili = []
     empty = []
     while unchecked:
@@ -280,23 +281,33 @@ def file_extract(disk: Disk, path: pathlib.Path, nom: str):
         codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
-def fili_extract(disk: Disk, path: pathlib.Path):
+def fili_get(disk: Disk):
     fili, _ = fili_locate(disk.fat)
+    back = {}
+    for file in fili:
+        entry = file_entry_from_pointer(disk.root_dir, file[0])
+        name = entry.full_name
+        back[name] = {'entry': entry, 'location': file}
+    return fili
+
+
+def fili_extract(disk: Disk, path: pathlib.Path):
+    fili = fili_get(disk)
     folder = path.parent / path.stem
     try:
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for file in fili:
-        entry = file_entry_from_pointer(disk.root_dir, file[0])
-        with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(file_get(disk.img, disk.struct, file, entry.size))
+    for name, file in fili:
+        with open(folder / name, 'wb') as codex:
+            codex.write(file_get(disk.img, disk.struct, file['location'], file['entry'].size))
 
 
-def fili_print(fili: list[loc_t]):
+def fili_print(disk: Disk, fili: list[loc_t]):
     for file in fili:
         name = file_entry_from_pointer(disk.root_dir, file[0]).full_name
         print(name, file)
+
 
 """
 empty space locate
@@ -304,11 +315,16 @@ file_add
 format
 """
 
-scrollnom = sys.argv[1]
-scroll = pathlib.Path(scrollnom)
 
-disk = Disk(scroll, read_only=True)
-fili, emp = fili_locate(disk.fat)
-fili_print(fili)
-print(f"empty {emp}")
-fili_extract(disk, scroll)
+def main():
+    scrollnom = sys.argv[1]
+    scroll = pathlib.Path(scrollnom)
+
+    disk = Disk(scroll, read_only=True)
+    fili, emp = fili_locate(disk.fat)
+    fili_print(disk, fili)
+    print(f"empty {emp}")
+    fili_extract(disk, scroll)
+
+
+main()
