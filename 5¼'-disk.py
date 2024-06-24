@@ -101,6 +101,9 @@ class DiskStruct:
     def fat_sz(self):
         return self.fat_sects * Sector_sz
 
+    def fati_clusters(self):
+        return self.fat_sects  * Fat_Numb / self.cluster_sects
+
     @property
     def track_sz(self):
         return self.track_sects * Sector_sz
@@ -203,12 +206,7 @@ class DiskReadError(Exception):
         self.back = back
 
 
-def file_locate(fat: fat_t, first: int) -> loc_t:
-    """
-    :param fat: array of pointers
-    :param first: first logical sector
-    """
-    pointer = first
+def file_locate(fat: fat_t, pointer: int) -> loc_t:
     file = []
     while True:
         file.append(pointer)
@@ -236,7 +234,7 @@ def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[
 
 
 def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
-    unchecked = set(range(1, Fat12_Entries))
+    unchecked = set(range(Fat_Numb, Fat12_Entries))  # at least true for Fat_Numb == 2
     fili = []
     empty = []
     while unchecked:
@@ -289,26 +287,28 @@ def fili_extract(disk: Disk, path: pathlib.Path):
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for file in fili[1:]:  # at least correct for Reserved_Sectors == 1
+    for file in fili:
         entry = file_entry_from_pointer(disk.root_dir, file[0])
         with open(folder / entry.full_name, 'wb') as codex:
             codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
+def fili_print(fili: list[loc_t]):
+    for file in fili:
+        name = file_entry_from_pointer(disk.root_dir, file[0]).full_name
+        print(name, file)
+
 """
-fili_get
-file_firsti_get
 empty space locate
 file_add
 format
 """
 
-scroll = pathlib.Path(r"D:\Computing\86Box-Optimized-Skylake-32-c3294fcf\disks"
-                      r"\Lattice C 2.15 for DOS (1985) (5.25)\disk01.img")
+scrollnom = sys.argv[1]
+scroll = pathlib.Path(scrollnom)
 
 disk = Disk(scroll, read_only=True)
 fili, emp = fili_locate(disk.fat)
-print("\n".join(str(f) for f in fili))
-print(f"empty: {emp}")
-disk.dir()
+fili_print(fili)
+print(f"empty {emp}")
 fili_extract(disk, scroll)
