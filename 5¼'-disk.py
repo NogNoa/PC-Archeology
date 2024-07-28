@@ -3,7 +3,7 @@ import datetime
 import os
 import pathlib
 import sys
-from typing import Optional
+from typing import Optional, Iterator
 
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
@@ -102,6 +102,7 @@ class DiskStruct:
     def fat_sz(self):
         return self.fat_sects * Sector_sz
 
+    @property
     def fati_clusters(self):
         return self.fat_sects  * Fat_Numb / self.cluster_sects
 
@@ -136,7 +137,7 @@ class DiskStruct:
 
 class Fat_ID_Error(Exception):
     def __init__(self, fat_id):
-        message = f"Fat ID {fat_id} is invalid out of scope due to modernity"
+        message = f"Fat ID {fat_id:X} is invalid or out of scope due to modernity"
         super().__init__(message)
 
 
@@ -234,7 +235,7 @@ def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[
     return back
 
 
-def fili_locate(fat: fat_t) -> tuple[list[loc_t], list[int]]:
+def fili_locate(fat: fat_t) -> tuple[list[loc_t], loc_t]:
     unchecked = set(range(Fat_Offset, Fat12_Entries))
     fili = []
     empty = []
@@ -281,26 +282,17 @@ def file_extract(disk: Disk, path: pathlib.Path, nom: str):
         codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
-def fili_get(disk: Disk):
-    fili, _ = fili_locate(disk.fat)
-    back = {}
-    for file in fili:
-        entry = file_entry_from_pointer(disk.root_dir, file[0])
-        name = entry.full_name
-        back[name] = {'entry': entry, 'location': file}
-    return fili
-
-
 def fili_extract(disk: Disk, path: pathlib.Path):
-    fili = fili_get(disk)
+    fili, _ = fili_locate(disk.fat)
     folder = path.parent / path.stem
     try:
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for name, file in fili:
-        with open(folder / name, 'wb') as codex:
-            codex.write(file_get(disk.img, disk.struct, file['location'], file['entry'].size))
+    for file in fili:
+        entry = file_entry_from_pointer(disk.root_dir, file[0])
+        with open(folder / entry.full_name, 'wb') as codex:
+            codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
 def fili_print(disk: Disk, fili: list[loc_t]):
@@ -324,7 +316,7 @@ def main():
     fili, emp = fili_locate(disk.fat)
     fili_print(disk, fili)
     print(f"empty {emp}")
-    fili_extract(disk, scroll)
+    # fili_extract(disk, scroll)
 
 
 main()
