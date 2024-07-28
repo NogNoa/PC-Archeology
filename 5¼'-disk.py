@@ -224,7 +224,7 @@ def file_locate(fat: fat_t, pointer: int) -> loc_t:
     return file
 
 
-def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
+def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
@@ -279,16 +279,16 @@ def file_extract(disk: Disk, path: pathlib.Path, nom: str):
     entry = file_entry_from_name(disk.root_dir, nom)
     file = file_locate(disk.fat, entry.first_cluster)
     with open(path.parent / nom, 'wb') as codex:
-        codex.write(file_get(disk.img, disk.struct, file, entry.size))
+        codex.write(loc_get(disk.img, disk.struct, file, entry.size))
 
 
-def fili_get(disk: Disk) -> Iterator[tuple[file_entry, loc_t]]:
-    fili, _ = fili_locate(disk.fat)
-    return ((file_entry_from_pointer(disk.root_dir, file[0]), file) for file in fili)
+def fili_get(disk: Disk, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
+    loci = loci or fili_locate(disk.fat)[0]
+    return ((file_entry_from_pointer(disk.root_dir, loc[0]), loc) for loc in loci)
 
 
-def fili_extract(disk: Disk, path: pathlib.Path):
-    fili = fili_get(disk)
+def fili_extract(disk: Disk, path: pathlib.Path, loci: Optional[list[loc_t]] = None):
+    fili = loci or fili_get(disk)
     folder = path.parent / path.stem
     try:
         os.mkdir(folder)
@@ -296,13 +296,13 @@ def fili_extract(disk: Disk, path: pathlib.Path):
         pass
     for entry, loc in fili:
         with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(file_get(disk.img, disk.struct, loc, entry.size))
+            codex.write(loc_get(disk.img, disk.struct, loc, entry.size))
 
 
-def fili_print(disk: Disk, fili: list[loc_t]):
-    for file in fili:
-        name = file_entry_from_pointer(disk.root_dir, file[0]).full_name
-        print(name, file)
+def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
+    fili = fili_get(disk, loci)
+    for entry, loc in fili:
+        print(entry.full_name, loc)
 
 
 """
@@ -318,7 +318,7 @@ def main():
 
     disk = Disk(scroll, read_only=True)
     fili, emp = fili_locate(disk.fat)
-    fili_print(disk, fili)
+    loci_print(disk, fili)
     print(f"empty {emp}")
     fili_extract(disk, scroll)
 
