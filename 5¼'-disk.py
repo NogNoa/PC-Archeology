@@ -282,17 +282,21 @@ def file_extract(disk: Disk, path: pathlib.Path, nom: str):
         codex.write(file_get(disk.img, disk.struct, file, entry.size))
 
 
-def fili_extract(disk: Disk, path: pathlib.Path):
+def fili_get(disk: Disk) -> Iterator[tuple[file_entry, loc_t]]:
     fili, _ = fili_locate(disk.fat)
+    return ((file_entry_from_pointer(disk.root_dir, file[0]), file) for file in fili)
+
+
+def fili_extract(disk: Disk, path: pathlib.Path):
+    fili = fili_get(disk)
     folder = path.parent / path.stem
     try:
         os.mkdir(folder)
     except FileExistsError:
         pass
-    for file in fili:
-        entry = file_entry_from_pointer(disk.root_dir, file[0])
+    for entry, loc in fili:
         with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(file_get(disk.img, disk.struct, file, entry.size))
+            codex.write(file_get(disk.img, disk.struct, loc, entry.size))
 
 
 def fili_print(disk: Disk, fili: list[loc_t]):
@@ -316,7 +320,7 @@ def main():
     fili, emp = fili_locate(disk.fat)
     fili_print(disk, fili)
     print(f"empty {emp}")
-    # fili_extract(disk, scroll)
+    fili_extract(disk, scroll)
 
 
 main()
