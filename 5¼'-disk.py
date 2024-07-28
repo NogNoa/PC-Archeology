@@ -104,7 +104,7 @@ class DiskStruct:
 
     @property
     def fati_clusters(self):
-        return self.fat_sects  * Fat_Numb / self.cluster_sects
+        return self.fat_sects * Fat_Numb / self.cluster_sects
 
     @property
     def track_sz(self):
@@ -172,14 +172,14 @@ def ms_time(call: bytes) -> dict[str, int]:
     hour = call[1] // 8  # 11..16
     return {'second': 2 * call[0] % 0x20,  # 0..5
             'minute': call[0] // 0x20 + 0x20 * call[1] % 8,  # 5..11
-            'hour': hour - 1 if hour else hour}
+            'hour'  : hour - 1 if hour else hour}
     # hour need to be converted from 0..25 (0 being dummy) on fat to 0..24 on python
 
 
 def ms_date(call: bytes) -> dict[str, int]:
-    return {'day': call[0] % 0x20 or 1,  # 0..5
+    return {'day'  : call[0] % 0x20 or 1,  # 0..5
             'month': call[0] // 0x20 + 0x20 * call[1] % 2 or 1,  # 5..9
-            'year': 1980 + call[1] // 2}  # 9..16
+            'year' : 1980 + call[1] // 2}  # 9..16
 
 
 def root_dir_factory(dir_img: image_t) -> dir_t:
@@ -304,6 +304,12 @@ def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
     for entry, loc in fili:
         print(entry.full_name, loc)
 
+
+def file_add(disk: Disk, file_nom: str):
+    file_size = os.path.getsize(file_nom)
+    file_sects = file_size // Sector_sz + bool(file_size % Sector_sz)
+    empty = fili_locate(disk.fat)[1]
+    allocate = empty[:file_sects]
 
 """
 empty space locate
