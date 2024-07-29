@@ -3,6 +3,7 @@ import datetime
 import os
 import pathlib
 import sys
+from enum import Enum
 from typing import Optional, Iterator
 
 Sector_sz = 0x200
@@ -306,13 +307,26 @@ def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
         print(entry.full_name, loc)
 
 
+def write_sector(sector, pointer):
+    pass
+
+
+class Whence(Enum):
+    start = 0
+    cursor = 1
+    end = 2
+
+
 def file_add(disk: Disk, file_nom: str):
     if disk.read_only:
         raise Exception("Tried to write a file to disk opened in read-only mode")
-    file_size = os.path.getsize(file_nom)
-    file_sects = file_size // Sector_sz + bool(file_size % Sector_sz)
     empty = fili_locate(disk.fat)[1]
-    allocate = empty[:file_sects]
+    file = open(file_nom, mode="rb")
+    while True:
+        sector = file.read(Sector_sz)
+        # file.seek(Sector_sz, Whence.cursor)
+        pointer, empty,  = empty[0], empty[1:]
+        write_sector(sector, pointer)
 
 
 """
@@ -326,11 +340,12 @@ def main():
     scrollnom = sys.argv[1]
     scroll = pathlib.Path(scrollnom)
 
-    disk = Disk(scroll, read_only=True)
+    disk = Disk(scroll, read_only=False)
     fili, emp = fili_locate(disk.fat)
     loci_print(disk, fili)
     print(f"empty {emp}")
     fili_extract(disk, scroll)
+    file_add(disk, sys.argv[2])
 
 
 main()
