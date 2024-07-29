@@ -56,8 +56,9 @@ dir_t = tuple[file_entry, ...]
 
 
 class Disk:
-    def __init__(self, *args, **kwargs):
-        self.img = img = disk_factory(*args, **kwargs)
+    def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
+        self.img = img = disk_factory(scroll_nom, read_only)
+        self.read_only = read_only
         self.boot = img[0]
         self.struct = struct = DiskStruct(img[1][0])
         fat = img[1:1 + struct.fat_sects]
@@ -141,7 +142,7 @@ class Fat_ID_Error(Exception):
         super().__init__(message)
 
 
-def disk_factory(scroll_nom: str, read_only) -> image_t:
+def disk_factory(scroll_nom: str | os.PathLike, read_only: bool) -> image_t:
     mode = "br" if read_only else "br+"
     with open(scroll_nom, mode) as file:
         scroll = file.read()
@@ -306,10 +307,13 @@ def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
 
 
 def file_add(disk: Disk, file_nom: str):
+    if disk.read_only:
+        raise Exception("Tried to write a file to disk opened in read-only mode")
     file_size = os.path.getsize(file_nom)
     file_sects = file_size // Sector_sz + bool(file_size % Sector_sz)
     empty = fili_locate(disk.fat)[1]
     allocate = empty[:file_sects]
+
 
 """
 empty space locate
