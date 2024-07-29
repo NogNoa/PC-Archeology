@@ -4,7 +4,8 @@ import os
 import pathlib
 import sys
 from enum import Enum
-from typing import Optional, Iterator
+from typing import Optional, Iterator, BinaryIO
+from collections.abc import Sequence
 
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
@@ -51,7 +52,7 @@ class file_entry:
 
 
 image_t = tuple[bytes, ...]
-fat_t = tuple[int, ...]
+fat_t = Sequence[int, ...]
 loc_t = list[int]
 dir_t = tuple[file_entry, ...]
 
@@ -66,7 +67,7 @@ class Disk:
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = fat12_factory(b''.join(fat), struct.fat_sz)
         root_dir = self.img[struct.root_dir_floor: struct.files_floor]
-        self.root_dir = root_dir_factory(root_dir)
+        self.root_dir = dir_factory(root_dir)
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -184,8 +185,8 @@ def ms_date(call: bytes) -> dict[str, int]:
             'year' : 1980 + call[1] // 2}  # 9..16
 
 
-def root_dir_factory(dir_img: image_t) -> dir_t:
-    root_dir = []
+def dir_factory(dir_img: image_t) -> dir_t:
+    folder = []
     for sector in dir_img:
         while sector:
             entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
@@ -193,12 +194,12 @@ def root_dir_factory(dir_img: image_t) -> dir_t:
                 continue
             elif entry[0] == 0:
                 break
-            root_dir.append(entry)
+            folder.append(entry)
         else:
             continue
         break
-    root_dir = [file_entry(entry) for entry in root_dir]
-    return tuple(root_dir)
+    folder = [file_entry(entry) for entry in folder]
+    return tuple(folder)
 
 
 class DiskReadError(Exception):
@@ -307,7 +308,7 @@ def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
         print(entry.full_name, loc)
 
 
-def write_sector(sector, pointer):
+def write_sector(sector: bytes, pointer: int):
     pass
 
 
@@ -317,16 +318,27 @@ class Whence(Enum):
     end = 2
 
 
+def fat_update(disk: Disk, allocated: fat_t):
+    pass
+
+
+def dir_update(disk: Disk, folder: dir_t, file: BinaryIO):
+    pass
+
+
 def file_add(disk: Disk, file_nom: str):
     if disk.read_only:
         raise Exception("Tried to write a file to disk opened in read-only mode")
     empty = fili_locate(disk.fat)[1]
     file = open(file_nom, mode="rb")
-    while True:
-        sector = file.read(Sector_sz)
-        # file.seek(Sector_sz, Whence.cursor)
-        pointer, empty,  = empty[0], empty[1:]
+    allocated = []
+    while sector := file.read(Sector_sz):
+        pointer, empty = empty[0], empty[1:]
         write_sector(sector, pointer)
+        allocated.append(pointer)
+    # noinspection PyTypeChecker
+    fat_update(disk, allocated)
+    dir_update(disk, disk.root_dir, file)
 
 
 """
