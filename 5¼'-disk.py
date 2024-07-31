@@ -227,7 +227,7 @@ def file_locate(fat: fat_t, pointer: int) -> loc_t:
     return file
 
 
-def adress_from_fat(pointer: int, struct: DiskStruct):
+def adress_from_fat_index(pointer: int, struct: DiskStruct):
     return (pointer - Fat_Offset) * struct.cluster_sects
 
 
@@ -235,7 +235,7 @@ def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[i
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
-        i = adress_from_fat(i, struct)
+        i = adress_from_fat_index(i, struct)
         back += files_img[i:i + struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
@@ -326,24 +326,29 @@ def fat_update(disk: Disk, allocated: fat_t):
     pass
 
 
-def dir_update(disk: Disk, folder: dir_t, file_nom: str):
+def dir_update(folder: dir_t, file_nom: str):
     pass
+
+
+def file_read(file_nom: str):
+    with open(file_nom, mode="rb") as file:
+        while sector := file.read(Sector_sz):
+            yield sector
 
 
 def file_add(disk: Disk, file_nom: str):
     if disk.read_only:
         raise Exception("Tried to write a file to disk opened in read-only mode")
     empty = fili_locate(disk.fat)[1]
-    file = open(file_nom, mode="rb")
     allocated = []
-    while sector := file.read(Sector_sz):
+    files_plan = {}
+    for sector in file_read(file_nom):
         pointer, empty = empty[0], empty[1:]
-        write_sector(disk, sector, pointer)
+        files_plan[pointer] = sector
         allocated.append(pointer)
-    file.close()
     # noinspection PyTypeChecker
     fat_update(disk, allocated)
-    dir_update(disk, disk.root_dir, file_nom)
+    dir_plan = dir_update(disk.root_dir, file_nom)
 
 
 """
