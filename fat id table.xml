@@ -1,0 +1,106 @@
+<!-- more details to be sorted out, split into two tables, one for standard formats, one for exotic formats -->
+<!-- 86-DOS 8" formats -->
+<!-- HP 150, 3.5&quot;, 270KB, SS -->
+<!-- Tandy 2000, 5.25&quot;, 720KB, DS, 96tpi -->
+<!-- DEC Rainbow, 5.25&quot;, 400KB, SS, 96tpi -->
+<!-- Victor 9000 / Sirius 1, 5.25&quot;, 1.2MB, DS, 96tpi, multi-speed -->
+<!-- various Apricot formats, see below -->
+<!-- 3mode formats to be added -->
+<!-- FIDO 8" double-density format -->
+<!-- 2x IBM Displaywriter format 8" http://hackipedia.org/Physical%20media/Floppy%20disk/MS-DOS/MSDOS%201.xx%20-%202.xx%20Disk%20formats%20T.%20Jennings%2019%20Aug%2083%2c%20%288%27%20formats%20updated%2017%20Aug%29.ascii.txt.utf-8.txt -->
+<!-- IBM 320KB 8-sectors 2-sided format sectors/FAT oddity: 1 or 2? -->
+<!-- alternative sector ordering in DOS 1.1 vs. DOS 2.0+ on 2-sided floppies -->
+{{anchor|FATID}}
+<div style="overflow-x:auto">
+{| class="wikitable sortable mw-collapsible mw-collapsed" width="100%" style="margin:0"
+|-
+! {{rh}} | FAT ID (compare with [[#media|media ID]] at BPB offset {{mono|[[#BPB20_OFS_0Ah|0x0A]]}})<ref name="Microsoft_2003_KB75131"/><ref name="Microsoft_1987_DOS33Ref"/> 
+| colspan="2" style="background:#F2F2F2;" | {{mono|'''0xFF'''}} || colspan="3" style="background:#F2F2F2;" | {{mono|'''0xFE'''}} || colspan="3" style="background:#F2F2F2;" | {{mono|'''0xFD'''}} || style="background:#F2F2F2;" | {{mono|'''0xFC'''}} || {{mono|0xFB}} || {{mono|0xFA}} || colspan="3" style="background:#F2F2F2;" | {{mono|'''0xF9'''}} || colspan="3" | {{mono|0xF8}} || colspan="2" style="background:#F2F2F2;" | {{mono|'''0xF0'''}} || {{mono|0xED}} || {{mono|0xE5}}
+|-
+! {{rh}} | Size 
+| 8" || style="background:#F2F2F2;" | 5.25" || style="background:#F2F2F2;" | 8" || style="background:#F2F2F2;" | 8" || style="background:#F2F2F2;" | 5.25" || 8" || style="background:#F2F2F2;" | 8" || style="background:#F2F2F2;" | 5.25" || style="background:#F2F2F2;" | 5.25" || 5.25" / 3.5" || 5.25" / 3.5" || style="background:#F2F2F2;" | 5.25" || style="background:#F2F2F2;" | 3.5" || 3.5" || 5.25" || 5.25" / 3.5" || 3.5" || style="background:#F2F2F2;" | 3.5" || style="background:#F2F2F2;" | 3.5" || 5.25" || 8"
+|-
+! {{rh}} | Density 
+| {{dunno}} || style="background:#F2F2F2;" | DD 48tpi || style="background:#F2F2F2;" | SD || style="background:#F2F2F2;" | DD || style="background:#F2F2F2;" | DD 48tpi || SD || style="background:#F2F2F2;" | SD || style="background:#F2F2F2;" | DD 48tpi || style="background:#F2F2F2;" | DD 48tpi || {{dunno}}<!-- QD or DD --> || {{dunno}}<!-- QD or DD --> || style="background:#F2F2F2;" | HD 96tpi || style="background:#F2F2F2;" | DD 135tpi || HD 135tpi || QD 96tpi || {{dunno}}<!-- QD or DD --> || DD || style="background:#F2F2F2;" | HD 135tpi || style="background:#F2F2F2;" | ED || QD 96tpi || SD
+|-
+! {{rh}} | Modulation 
+| {{dunno}} || style="background:#F2F2F2;" | MFM || style="background:#F2F2F2;" | FM || style="background:#F2F2F2;" | MFM || style="background:#F2F2F2;" | MFM || FM || style="background:#F2F2F2;" | FM || style="background:#F2F2F2;" | MFM || style="background:#F2F2F2;" | MFM || MFM || MFM || style="background:#F2F2F2;" | MFM || style="background:#F2F2F2;" | MFM || MFM || MFM || MFM || MFM || style="background:#F2F2F2;" | MFM || style="background:#F2F2F2;" | MFM || MFM || FM
+|-
+! {{rh}} | Formatted capacity (KB) 
+| {{dunno}} || style="background:#F2F2F2;" | 320 || style="background:#F2F2F2;" | 250 ("old")<!-- "256128 bytes free, old style" --><ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 1200 || style="background:#F2F2F2;" | 160 || 250 ("new")<!-- "255744 bytes free" --><ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 500 || style="background:#F2F2F2;" | 360 || style="background:#F2F2F2;" | 180 || 640 || 320 || style="background:#F2F2F2;" | 1200 || style="background:#F2F2F2;" | 720 || 1440 || 720 || 360 || 360 || style="background:#F2F2F2;" | 1440 || style="background:#F2F2F2;" | 2880 || 720 || 243&nbsp;/ 250
+|-
+! {{rh}} | Cylinders (CHS) 
+| 77 || style="background:#F2F2F2;" | 40 || style="background:#F2F2F2;" | 77 || style="background:#F2F2F2;" | 77 || style="background:#F2F2F2;" | 40 || 77 || style="background:#F2F2F2;" | 77 || style="background:#F2F2F2;" | 40 || style="background:#F2F2F2;" | 40 || 80 || 80 || style="background:#F2F2F2;" | 80 || style="background:#F2F2F2;" | 80 || 80 || 80 || 80 || 80 || style="background:#F2F2F2;" | 80 || style="background:#F2F2F2;" | 80 || 80 || 77
+|-
+! {{rh}} | Physical sectors / track <br/>(BPB offset {{mono|[[#BPB331_OFS_0Dh|0x0D]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 8 || style="background:#F2F2F2;" | 26 || style="background:#F2F2F2;" | 8 || style="background:#F2F2F2;" | 8 || 26 || style="background:#F2F2F2;" | 26 || style="background:#F2F2F2;" | 9 || style="background:#F2F2F2;" | 9 || 8 || 8 || style="background:#F2F2F2;" | 15 || style="background:#F2F2F2;" | 9 || 18 || 9 (8<ref name="Lai_1992_DevDrv"/>) || 9 || 9 || style="background:#F2F2F2;" | 18 || style="background:#F2F2F2;" | 36 || 9 (8<ref name="Lai_1992_DevDrv"/>) || 26
+|-
+! {{rh}} | Number of heads <br/>(BPB offset {{mono|[[#BPB331_OFS_0Fh|0x0F]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 1<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 2<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/><ref name="Microsoft_2003_KB75131"/><ref name="Microsoft_2014_DEVDRIV"/> (1<!-- will have to find source for this again -->) || style="background:#F2F2F2;" | 1 || 1<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/><ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 2<ref name="Microsoft_2003_KB75131"/> || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 1 || 2 || 1 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 2 || 1 || 1 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 1
+|-
+! {{rh}} | Byte payload / physical sector 
+| {{dunno}} || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 128 || style="background:#F2F2F2;" | 1024 || style="background:#F2F2F2;" | 512 || 128 || style="background:#F2F2F2;" | 128 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 512 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 512 || 512 || 512 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 128
+|-
+! {{rh}} | Bytes / logical sector <br/>(BPB offset {{mono|[[#BPB20_OFS_00h|0x00]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 128 || style="background:#F2F2F2;" | 1024 || style="background:#F2F2F2;" | 512 || 128 || style="background:#F2F2F2;" | 128 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 512 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 512 || 512 || 512 || style="background:#F2F2F2;" | 512 || style="background:#F2F2F2;" | 512 || 512 || 128
+|-
+! {{rh}} | Logical sectors / cluster <br/>(BPB offset {{mono|[[#BPB20_OFS_02h|0x02]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 4 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || 4 || style="background:#F2F2F2;" | 4 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 1 || 2 || 1<ref name="Microsoft_2003_KB75131"/> (2?<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/>) || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 2 || 1 || {{dunno}} || 2 || {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 2 || {{dunno}} || 4
+|-
+! {{rh}} | Reserved logical sectors <br/>(BPB offset {{mono|[[#BPB20_OFS_03h|0x03]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || 4<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 4 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || 1 || 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 (2<!-- MS-DOS 6.22 DRIVER.SYS -->) || 1 || 1 || 1 || 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || {{dunno}} || 1
+|-
+! {{rh}} | Number of FATs <br/>(BPB offset {{mono|[[#BPB20_OFS_05h|0x05]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 2 || 2 || 2 || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 2
+|-
+! {{rh}} | Root directory entries <br/>(BPB offset {{mono|[[#BPB20_OFS_06h|0x06]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 112 (7 sectors) || style="background:#F2F2F2;" | 68 (17 sectors) || style="background:#F2F2F2;" | 192 (6 sectors) || style="background:#F2F2F2;" | 64 (4 sectors) || 68 (17 sectors) || style="background:#F2F2F2;" | 68 (17 sectors) || style="background:#F2F2F2;" | 112 (7 sectors) || style="background:#F2F2F2;" | 64 (4 sectors) || 112 (7 sectors) || 112 (7 sectors) || style="background:#F2F2F2;" | 224 (14 sectors) || style="background:#F2F2F2;" | 112 (7 sectors) || 224 (14 sectors) || {{dunno}} || 112 (7 sectors) || {{dunno}} || style="background:#F2F2F2;" | 224 (14 sectors) || style="background:#F2F2F2;" | 240 (15 sectors) || {{dunno}} || 64 (16 sectors)
+|-
+! {{rh}} | Total logical sectors <br/>(BPB offset {{mono|[[#BPB20_OFS_08h|0x08]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 640 || style="background:#F2F2F2;" | 2002<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 1232<ref name="Microsoft_2003_KB75131"/><ref name="Microsoft_2014_DEVDRIV"/> (616<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/>) || style="background:#F2F2F2;" | 320 || 2002<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/><ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 4004<ref name="Microsoft_2003_KB75131"/> || style="background:#F2F2F2;" | 720 || style="background:#F2F2F2;" | 360 || 1280 || 640 || style="background:#F2F2F2;" | 2400 || style="background:#F2F2F2;" | 1440 || 2880 || {{dunno}} || 720 || {{dunno}} || style="background:#F2F2F2;" | 2880 || style="background:#F2F2F2;" | 5760 || {{dunno}} || 2002
+|-
+! {{rh}} | Logical sectors / FAT <br/>(BPB offset {{mono|[[#BPB20_OFS_0Bh|0x0B]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 6<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 1 || 6<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/> || style="background:#F2F2F2;" | 6?<ref name="Microsoft_2003_KB75131"/><!-- 4 (2)--> || style="background:#F2F2F2;" | 2 || style="background:#F2F2F2;" | 2 || 2 || 2<ref name="Microsoft_2003_KB75131"/> (1?<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/>) || style="background:#F2F2F2;" | 7 || style="background:#F2F2F2;" | 3 || 9 (7) || {{dunno}} || 2 || {{dunno}} || style="background:#F2F2F2;" | 9 || style="background:#F2F2F2;" | 9 || {{dunno}} || 1
+|-
+! {{rh}} | Hidden sectors <br/>(BPB offset {{mono|[[#BPB331_OFS_11h|0x11]]}}) 
+| {{dunno}} || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 3<ref name="Microsoft_2003_KB75131"/> (0<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/>) || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || 0 || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || 0 || 0 || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || 0 || 0 || 0 || 0 || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || {{dunno}} || 0
+|-
+! {{rh}} | Total number of clusters 
+| {{dunno}} || style="background:#F2F2F2;" | 315 || style="background:#F2F2F2;" | 497 || style="background:#F2F2F2;" | 1227 || style="background:#F2F2F2;" | 313 || {{dunno}} || style="background:#F2F2F2;" | 997?<ref name="Microsoft_2003_KB75131"/> || style="background:#F2F2F2;" | 354 || style="background:#F2F2F2;" | 351 || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | 2371 || style="background:#F2F2F2;" | 713 || 2847? || {{dunno}} || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | 2847 || style="background:#F2F2F2;" | 2863 || {{dunno}} || {{dunno}}
+|-
+! {{rh}} | Logical sector order 
+| {{dunno}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}} || {{dunno}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}} || {{dunno}} || {{dunno}} || {{dunno}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}} || {{dunno}}
+|-
+! {{rh}} | Sector mapping 
+| {{dunno}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|sector+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|sector+ head+ track+}} || {{verth|sector+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|sector+ head+ track+}} || {{dunno}} || {{verth|sector+ track+}} || {{verth|sector+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{verth|cellstyle=background:#F2F2F2;|sector+ head+ track+}} || {{dunno}} || {{verth|sector+ track+}}
+|-
+! {{rh}} | First physical sector (CHS) 
+| {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || 1 || {{dunno}} || 1 || {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 1 || {{dunno}} || 1
+|-
+! {{rh}} | {{code|DRIVER.SYS /F:n}}
+| {{dunno}} || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 3 || style="background:#F2F2F2;" | 4 || style="background:#F2F2F2;" | 0 || {{dunno}} || style="background:#F2F2F2;" | 3 || style="background:#F2F2F2;" | 0 || style="background:#F2F2F2;" | 0 || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | 1 || style="background:#F2F2F2;" | 2 || 7 || {{dunno}} || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | 7 || style="background:#F2F2F2;" | 9 || {{dunno}} || 3
+|-
+! {{rh}} | BPB Presence 
+| {{dunno}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}}  || {{dunno|style="background:#F2F2F2;" }} || {{dunno|style=background:#F2F2F2;}} || {{dunno|style=background:#F2F2F2;}} || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | Yes || style="background:#F2F2F2;" | Yes || Yes || {{dunno}} || {{dunno}} || {{dunno}} || style="background:#F2F2F2;" | Yes || style="background:#F2F2F2;" | Yes || {{dunno}} || {{dunno}}
+|-
+! {{rh}} | Support 
+| {{dunno}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 1.1<ref name="Microsoft_2014_DEVDRIV"/>}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 1.0<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/>}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 2.0}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 1.0<ref name="Microsoft_2014_DEVDRIV"/>}} 
+| {{dunno}}<ref name="Microsoft_2014_Altos"/><ref name="Microsoft_2014_DEVDRIV"/><!-- "255744 bytes free" --> 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 2.0}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 2.0}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 2.0}} 
+| {{dunno}} || {{dunno}} || {{verth|cellstyle=background:#F2F2F2;|DOS 3.0}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 3.2}} 
+| {{verth|DOS 3.2 only;<br/>(DR-DOS<!-- at least 7.0-7.03 -->)}} 
+| {{verth|Sanyo 55x<br/>DS-DOS 2.11 only}} 
+| {{verth|MS-DOS 3.1<ref name="Microsoft_1984_MS-DOS_3.1_Ref"/>}} 
+| {{verth|MSX-DOS}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 3.3}} 
+| {{verth|cellstyle=background:#F2F2F2;|DOS 5.0}} 
+| {{verth|Tandy 2000 only}} 
+| {{verth|DR-DOS only<!-- at least 3.41-8.1, possibly earlier, but not 3.31 -->}}
+|}</div>
