@@ -4,8 +4,8 @@ import os
 import pathlib
 import sys
 from enum import Enum
-from typing import Optional, Iterator, BinaryIO
-from collections.abc import Sequence
+from typing import Optional
+from collections.abc import Iterator
 
 Sector_sz = 0x200
 Fat12_Entries = 0x155  # sector_sz * 2 // 3
@@ -52,7 +52,7 @@ class file_entry:
 
 
 image_t = tuple[bytes, ...]
-fat_t = Sequence[int, ...]
+fat_t = tuple[int, ...]
 loc_t = list[int]
 dir_t = tuple[file_entry, ...]
 
@@ -227,11 +227,15 @@ def file_locate(fat: fat_t, pointer: int) -> loc_t:
     return file
 
 
+def adress_from_fat(pointer: int, struct: DiskStruct):
+    return (pointer - Fat_Offset) * struct.cluster_sects
+
+
 def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
-        i = (i - Fat_Offset) * struct.cluster_sects
+        i = adress_from_fat(i, struct)
         back += files_img[i:i + struct.cluster_sects]
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
@@ -308,7 +312,7 @@ def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
         print(entry.full_name, loc)
 
 
-def write_sector(sector: bytes, pointer: int):
+def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
 
 
@@ -322,7 +326,7 @@ def fat_update(disk: Disk, allocated: fat_t):
     pass
 
 
-def dir_update(disk: Disk, folder: dir_t, file: BinaryIO):
+def dir_update(disk: Disk, folder: dir_t, file_nom: str):
     pass
 
 
@@ -334,11 +338,12 @@ def file_add(disk: Disk, file_nom: str):
     allocated = []
     while sector := file.read(Sector_sz):
         pointer, empty = empty[0], empty[1:]
-        write_sector(sector, pointer)
+        write_sector(disk, sector, pointer)
         allocated.append(pointer)
+    file.close()
     # noinspection PyTypeChecker
     fat_update(disk, allocated)
-    dir_update(disk, disk.root_dir, file)
+    dir_update(disk, disk.root_dir, file_nom)
 
 
 """
