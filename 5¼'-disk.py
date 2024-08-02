@@ -59,6 +59,7 @@ Whence_Start = 0
 Whence_Cursor = 1
 Whence_End = 2
 
+
 class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
         self.img = img = disk_factory(scroll_nom, read_only)
@@ -70,7 +71,7 @@ class Disk:
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(b''.join(fat), struct.fat_sz)
         root_dir = self.img[struct.root_dir_floor: struct.files_floor]
-        self.root_dir = Directory(root_dir)
+        self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -120,15 +121,12 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
-        codex = open(self.file, mode="ab")
-        codex.seek(Fat_Offset, Whence_Start)
-        self.fat.file_del(codex, entry.first_cluster)
-        codex.seek(self.struct.root_dir_floor, Whence_Start)
-        self.root_dir.file_del(codex, entry)
-        codex.flush()
-        codex.close()
-
-
+        with open(self.file, mode="ab+") as codex:
+            codex.seek(Fat_Offset, Whence_Start)
+            self.fat.file_del(codex, entry.first_cluster)
+            codex.seek(self.struct.root_dir_floor, Whence_Start)
+            self.root_dir.file_del(codex, entry)
+            codex.flush()
 
 
 @dataclasses.dataclass
@@ -264,14 +262,24 @@ class Fat12(Fat):
 
     def file_del(self, codex: BinaryIO, pointer: int):
         file = self.file_locate(pointer)
+        floor = codex.tell()
         for loc in file:
+            offset = floor + loc // 2 * 3
+            codex.seek(offset, Whence_Start)
+            b = codex.read(1)
+            codex.seek(-1, Whence_Cursor)
             if loc % 2:
-                codex.seek()
+                codex.write((b[0] % 0x10).to_bytes())
+                codex.write(b'\0')
+            else:
+                codex.write(b'\0')
+                codex.write((b[0] >> 4 << 4).to_bytes())
 
 
 class Directory:
-    def __init__(self, img):
+    def __init__(self, img, max_size: int):
         self._val = dir_factory(img)
+        self.max_size = max_size
 
     def __len__(self):
         return len(self._val)
@@ -308,21 +316,23 @@ class Directory:
     def file_del(self, codex: BinaryIO, entry: file_entry):
         index = self._val.index(entry)
         j = index
-        while j:
+        for _ in range(self.max_size):
+            if not j:
+                break
             # j has to be finite positive smaller then len(self._val)
             b = codex.read(1)
-            if b == b'':
-                codex.close()
+            if b in {b'', b'\0'}:
                 raise DiskReadError
-            elif b not in {0, 0xE5}:
+            elif b[0] != 0xE5:
                 j -= 1
             codex.seek(Dir_Entry_sz - 1, Whence_Cursor)
-        if index == len(self._val)  - 1:
+        else:
+            raise DiskReadError
+        if index == len(self._val) - 1:
             codex.write(b"\0")
         else:
             codex.write(b'\xE5')
         del self._val[index]
-
 
 
 class Fat_ID_Error(Exception):
@@ -416,9 +426,6 @@ def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[i
 
 def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
-
-
-
 
 
 def file_read(file_nom: str):
