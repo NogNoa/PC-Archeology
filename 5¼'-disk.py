@@ -3,7 +3,7 @@ import datetime
 import os
 import pathlib
 import sys
-from typing import Optional
+from typing import Optional, BinaryIO
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -53,7 +53,7 @@ class file_entry:
 image_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
-dir_t = tuple[file_entry, ...]
+dir_t = list[file_entry, ...]
 
 Whence_Start = 0
 Whence_Cursor = 1
@@ -122,10 +122,10 @@ class Disk:
         entry = self.root_dir[nom]
         codex = open(self.file, mode="ab")
         codex.seek(Fat_Offset, Whence_Start)
-        loci = self.fat.file_del(codex, entry.first_cluster)
+        self.fat.file_del(codex, entry.first_cluster)
         codex.seek(self.struct.root_dir_floor, Whence_Start)
         self.root_dir.file_del(codex, entry)
-        codex.seek(adress_from_fat_index(entry.first_cluster, self.struct))
+
 
 
 
@@ -277,7 +277,7 @@ class Directory:
     def __contains__(self, item):
         return item in self._val
 
-    def __getitem__(self, item: int | str):
+    def __getitem__(self, item: int | str) -> file_entry:
         if isinstance(item, str):
             nom = item.upper()
             sieve = lambda e: nom in {e.name, e.full_name}
@@ -296,6 +296,21 @@ class Directory:
 
     def update(self, file_nom: str):
         pass
+
+    def file_del(self, codex: BinaryIO, entry: file_entry):
+        index = self._val.index(entry)
+        j = index
+        for _ in self._val:
+            if not j:
+                break
+            b = codex.read(1)
+            if b not in {0, 0xE5}:
+                j -= 1
+            codex.seek(Dir_Entry_sz - 1, Whence_Cursor)
+        else:
+            raise DiskReadError
+        del self._val[index]
+
 
 
 class Fat_ID_Error(Exception):
@@ -359,7 +374,8 @@ def dir_factory(dir_img: image_t) -> dir_t:
             continue
         break
     folder = [file_entry(entry) for entry in folder]
-    return tuple(folder)
+    # noinspection PyTypeChecker
+    return folder
 
 
 class DiskReadError(Exception):
