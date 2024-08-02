@@ -125,6 +125,8 @@ class Disk:
         self.fat.file_del(codex, entry.first_cluster)
         codex.seek(self.struct.root_dir_floor, Whence_Start)
         self.root_dir.file_del(codex, entry)
+        codex.flush()
+        codex.close()
 
 
 
@@ -260,6 +262,12 @@ class Fat12(Fat):
     def update(self, allocated: fat_t):
         pass
 
+    def file_del(self, codex: BinaryIO, pointer: int):
+        file = self.file_locate(pointer)
+        for loc in file:
+            if loc % 2:
+                codex.seek()
+
 
 class Directory:
     def __init__(self, img):
@@ -300,15 +308,19 @@ class Directory:
     def file_del(self, codex: BinaryIO, entry: file_entry):
         index = self._val.index(entry)
         j = index
-        for _ in self._val:
-            if not j:
-                break
+        while j:
+            # j has to be finite positive smaller then len(self._val)
             b = codex.read(1)
-            if b not in {0, 0xE5}:
+            if b == b'':
+                codex.close()
+                raise DiskReadError
+            elif b not in {0, 0xE5}:
                 j -= 1
             codex.seek(Dir_Entry_sz - 1, Whence_Cursor)
+        if index == len(self._val)  - 1:
+            codex.write(b"\0")
         else:
-            raise DiskReadError
+            codex.write(b'\xE5')
         del self._val[index]
 
 
