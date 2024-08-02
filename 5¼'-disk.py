@@ -67,7 +67,7 @@ class Disk:
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(b''.join(fat), struct.fat_sz)
         root_dir = self.img[struct.root_dir_floor: struct.files_floor]
-        self.root_dir = dir_factory(root_dir)
+        self.root_dir = Directory(root_dir)
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -76,7 +76,7 @@ class Disk:
         print(f"{len(self.root_dir)} Files(s)")
 
     def file_extract(self, path: pathlib.Path, nom: str):
-        entry = file_entry_from_name(self.root_dir, nom)
+        entry = self.root_dir.file_entry_from_name(nom)
         file = self.fat.file_locate(entry.first_cluster)
         with open(path.parent / nom, 'wb') as codex:
             codex.write(loc_get(self.img, self.struct, file, entry.size))
@@ -94,7 +94,7 @@ class Disk:
 
     def fili_get(self, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
         loci = loci or self.fat.fili_locate()[0]
-        return ((file_entry_from_pointer(self.root_dir, loc[0]), loc) for loc in loci)
+        return ((self.root_dir.file_entry_from_pointer(loc[0]), loc) for loc in loci)
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_get(loci)
@@ -113,10 +113,10 @@ class Disk:
             allocated.append(pointer)
         # noinspection PyTypeChecker
         self.fat.update(allocated)
-        dir_plan = dir_update(self.root_dir, file_nom)
+        dir_plan = self.root_dir.update(file_nom)
 
     def file_del(self, nom: str):
-        entry = file_entry_from_name(self.root_dir, nom)
+        entry = self.root_dir.file_entry_from_name(nom)
 
 
 @dataclasses.dataclass
@@ -248,6 +248,40 @@ class Fat12(Fat):
         pass
 
 
+class Directory:
+    def __init__(self, img):
+        self._val = dir_factory(img)
+
+    def __len__(self):
+        return len(self._val)
+
+    def __call__(self):
+        return self._val
+
+    def __getitem__(self, index: int):
+        return self._val[index]
+
+    def file_entry_from_name(self, nom: str) -> file_entry:
+        nom = nom.upper()
+        try:
+            entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, self._val))[0]
+        except IndexError:
+            print(f"file {nom} doesn't exist", sys.stderr)
+            raise
+        return entry
+
+    def file_entry_from_pointer(self, pointer: int) -> file_entry:
+        try:
+            entry = tuple(filter(lambda e: pointer == e.first_cluster, self._val))[0]
+        except IndexError:
+            print(f"file not identified for cluster {pointer}", file=sys.stderr)
+            raise
+        return entry
+
+    def update(self, file_nom: str):
+        pass
+
+
 class Fat_ID_Error(Exception):
     def __init__(self, fat_id):
         message = f"Fat ID {fat_id:X} is invalid or out of scope due to modernity"
@@ -336,25 +370,6 @@ def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[i
     return back
 
 
-def file_entry_from_name(folder: dir_t, nom: str) -> file_entry:
-    nom = nom.upper()
-    try:
-        entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, folder))[0]
-    except IndexError:
-        print(f"file {nom} doesn't exist", sys.stderr)
-        raise
-    return entry
-
-
-def file_entry_from_pointer(folder: dir_t, pointer: int) -> file_entry:
-    try:
-        entry = tuple(filter(lambda e: pointer == e.first_cluster, folder))[0]
-    except IndexError:
-        print(f"file not identified for cluster {pointer}", file=sys.stderr)
-        raise
-    return entry
-
-
 def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
 
@@ -363,10 +378,6 @@ class Whence(Enum):
     start = 0
     cursor = 1
     end = 2
-
-
-def dir_update(folder: dir_t, file_nom: str):
-    pass
 
 
 def file_read(file_nom: str):
