@@ -65,7 +65,7 @@ class Disk:
         self.struct = struct = DiskStruct(img[1][0])
         fat = img[1:1 + struct.fat_sects]
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
-        self.fat = fat12_factory(b''.join(fat), struct.fat_sz)
+        self.fat = Fat12(b''.join(fat), struct.fat_sz)
         root_dir = self.img[struct.root_dir_floor: struct.files_floor]
         self.root_dir = dir_factory(root_dir)
 
@@ -78,7 +78,7 @@ class Disk:
     def file_add(self, file_nom: str):
         if self.read_only:
             raise Exception("Tried to write a file to disk opened in read-only mode")
-        empty = fili_locate(self.fat)[1]
+        empty = fili_locate(self.fat())[1]
         allocated = []
         files_plan = {}
         for sector in file_read(file_nom):
@@ -157,19 +157,24 @@ class DiskStruct:
 
 class Fat:
     def __init__(self):
-        self.val = ()
+        self._val = ()
 
     def __len__(self):
-        return len(self.val)
+        return len(self._val)
 
     def __call__(self):
-        return self.val
+        return self._val
+
+    def __getitem__(self, index: int):
+        return self._val[index]
 
 
 class Fat12(Fat):
     def __init__(self, buffer: bytes, fat_sz: int):
         super().__init__()
-        self.val = fat12_factory(buffer, fat_sz)
+        self._val = fat12_factory(buffer, fat_sz)
+
+
 
 
 
@@ -320,13 +325,13 @@ def file_entry_from_pointer(folder: dir_t, pointer: int) -> file_entry:
 
 def file_extract(disk: Disk, path: pathlib.Path, nom: str):
     entry = file_entry_from_name(disk.root_dir, nom)
-    file = file_locate(disk.fat, entry.first_cluster)
+    file = file_locate(disk.fat(), entry.first_cluster)
     with open(path.parent / nom, 'wb') as codex:
         codex.write(loc_get(disk.img, disk.struct, file, entry.size))
 
 
 def fili_get(disk: Disk, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
-    loci = loci or fili_locate(disk.fat)[0]
+    loci = loci or fili_locate(disk.fat())[0]
     return ((file_entry_from_pointer(disk.root_dir, loc[0]), loc) for loc in loci)
 
 
@@ -384,7 +389,7 @@ def main():
     scroll = pathlib.Path(scrollnom)
 
     disk = Disk(scroll, read_only=False)
-    fili, emp = fili_locate(disk.fat)
+    fili, emp = fili_locate(disk.fat())
     loci_print(disk, fili)
     print(f"empty {emp}")
     fili_extract(disk, scroll)
