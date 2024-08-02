@@ -75,6 +75,23 @@ class Disk:
         print("\n".join(back))
         print(f"{len(self.root_dir)} Files(s)")
 
+    def file_add(self, file_nom: str):
+        if self.read_only:
+            raise Exception("Tried to write a file to disk opened in read-only mode")
+        empty = fili_locate(self.fat)[1]
+        allocated = []
+        files_plan = {}
+        for sector in file_read(file_nom):
+            pointer, empty = empty[0], empty[1:]
+            files_plan[pointer] = sector
+            allocated.append(pointer)
+        # noinspection PyTypeChecker
+        fat_update(self, allocated)
+        dir_plan = dir_update(self.root_dir, file_nom)
+
+    def file_del(self, nom: str):
+        entry = file_entry_from_name(self.root_dir, nom)
+
 
 @dataclasses.dataclass
 class DiskStruct:
@@ -136,6 +153,25 @@ class DiskStruct:
     @property
     def files_floor(self):
         return self.root_dir_floor + self.root_dir_sects
+
+
+class Fat:
+    def __init__(self):
+        self.val = ()
+
+    def __len__(self):
+        return len(self.val)
+
+    def __call__(self):
+        return self.val
+
+
+class Fat12(Fat):
+    def __init__(self, buffer: bytes, fat_sz: int):
+        super().__init__()
+        self.val = fat12_factory(buffer, fat_sz)
+
+
 
 
 class Fat_ID_Error(Exception):
@@ -336,21 +372,6 @@ def file_read(file_nom: str):
             yield sector
 
 
-def file_add(disk: Disk, file_nom: str):
-    if disk.read_only:
-        raise Exception("Tried to write a file to disk opened in read-only mode")
-    empty = fili_locate(disk.fat)[1]
-    allocated = []
-    files_plan = {}
-    for sector in file_read(file_nom):
-        pointer, empty = empty[0], empty[1:]
-        files_plan[pointer] = sector
-        allocated.append(pointer)
-    # noinspection PyTypeChecker
-    fat_update(disk, allocated)
-    dir_plan = dir_update(disk.root_dir, file_nom)
-
-
 """
 empty space locate
 file_add
@@ -367,7 +388,7 @@ def main():
     loci_print(disk, fili)
     print(f"empty {emp}")
     fili_extract(disk, scroll)
-    file_add(disk, sys.argv[2])
+    disk.file_add(sys.argv[2])
 
 
 main()
