@@ -3,7 +3,6 @@ import datetime
 import os
 import pathlib
 import sys
-from enum import Enum
 from typing import Optional
 from collections.abc import Iterator
 
@@ -56,10 +55,14 @@ fat_t = tuple[int, ...]
 loc_t = list[int]
 dir_t = tuple[file_entry, ...]
 
+Whence_Start = 0
+Whence_Cursor = 1
+Whence_End = 2
 
 class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
         self.img = img = disk_factory(scroll_nom, read_only)
+        self.file = scroll_nom
         self.read_only = read_only
         self.boot = img[0]
         self.struct = struct = DiskStruct(img[1][0])
@@ -117,6 +120,13 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
+        codex = open(self.file, mode="ab")
+        codex.seek(Fat_Offset, Whence_Start)
+        loci = self.fat.file_del(codex, entry.first_cluster)
+        codex.seek(self.struct.root_dir_floor, Whence_Start)
+        self.root_dir.file_del(codex, entry)
+        codex.seek(adress_from_fat_index(entry.first_cluster, self.struct))
+
 
 
 @dataclasses.dataclass
@@ -195,6 +205,9 @@ class Fat:
     def __getitem__(self, index: int):
         return self._val[index]
 
+    def __contains__(self, item):
+        return item in self._val
+
     def file_locate(self, pointer: int) -> loc_t:
         # stub
         raise StopIteration
@@ -260,6 +273,9 @@ class Directory:
 
     def __iter__(self):
         return self._val.__iter__()
+
+    def __contains__(self, item):
+        return item in self._val
 
     def __getitem__(self, item: int | str):
         if isinstance(item, str):
@@ -374,10 +390,7 @@ def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
 
 
-class Whence(Enum):
-    start = 0
-    cursor = 1
-    end = 2
+
 
 
 def file_read(file_nom: str):
