@@ -76,7 +76,7 @@ class Disk:
         print(f"{len(self.root_dir)} Files(s)")
 
     def file_extract(self, path: pathlib.Path, nom: str):
-        entry = self.root_dir.file_entry_from_name(nom)
+        entry = self.root_dir[nom]
         file = self.fat.file_locate(entry.first_cluster)
         with open(path.parent / nom, 'wb') as codex:
             codex.write(loc_get(self.img, self.struct, file, entry.size))
@@ -94,7 +94,7 @@ class Disk:
 
     def fili_get(self, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
         loci = loci or self.fat.fili_locate()[0]
-        return ((self.root_dir.file_entry_from_pointer(loc[0]), loc) for loc in loci)
+        return ((self.root_dir[loc[0]], loc) for loc in loci)
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_get(loci)
@@ -116,7 +116,7 @@ class Disk:
         dir_plan = self.root_dir.update(file_nom)
 
     def file_del(self, nom: str):
-        entry = self.root_dir.file_entry_from_name(nom)
+        entry = self.root_dir[nom]
 
 
 @dataclasses.dataclass
@@ -258,23 +258,23 @@ class Directory:
     def __call__(self):
         return self._val
 
-    def __getitem__(self, index: int):
-        return self._val[index]
+    def __iter__(self):
+        return self._val.__iter__()
 
-    def file_entry_from_name(self, nom: str) -> file_entry:
-        nom = nom.upper()
+    def __getitem__(self, item: int | str):
+        if isinstance(item, str):
+            nom = item.upper()
+            sieve = lambda e: nom in {e.name, e.full_name}
+            err_massage = f"file {item} doesn't exist"
+        elif isinstance(item, int):
+            sieve = lambda e: item == e.first_cluster
+            err_massage = f"file not identified for cluster {item}"
+        else:
+            raise TypeError
         try:
-            entry = tuple(filter(lambda n: nom in {n.name, n.full_name}, self._val))[0]
+            entry = tuple(filter(sieve, self._val))[0]
         except IndexError:
-            print(f"file {nom} doesn't exist", sys.stderr)
-            raise
-        return entry
-
-    def file_entry_from_pointer(self, pointer: int) -> file_entry:
-        try:
-            entry = tuple(filter(lambda e: pointer == e.first_cluster, self._val))[0]
-        except IndexError:
-            print(f"file not identified for cluster {pointer}", file=sys.stderr)
+            print(err_massage, sys.stderr)
             raise
         return entry
 
