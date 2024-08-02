@@ -75,10 +75,36 @@ class Disk:
         print("\n".join(back))
         print(f"{len(self.root_dir)} Files(s)")
 
+    def file_extract(self, path: pathlib.Path, nom: str):
+        entry = file_entry_from_name(self.root_dir, nom)
+        file = self.fat.file_locate(entry.first_cluster)
+        with open(path.parent / nom, 'wb') as codex:
+            codex.write(loc_get(self.img, self.struct, file, entry.size))
+
+    def fili_extract(self, path: pathlib.Path, loci: Optional[list[loc_t]] = None):
+        fili = loci or self.fili_get()
+        folder = path.parent / path.stem
+        try:
+            os.mkdir(folder)
+        except FileExistsError:
+            pass
+        for entry, loc in fili:
+            with open(folder / entry.full_name, 'wb') as codex:
+                codex.write(loc_get(self.img, self.struct, loc, entry.size))
+
+    def fili_get(self, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
+        loci = loci or self.fat.fili_locate()[0]
+        return ((file_entry_from_pointer(self.root_dir, loc[0]), loc) for loc in loci)
+
+    def loci_print(self, loci: Optional[list[loc_t]] = None):
+        fili = self.fili_get(loci)
+        for entry, loc in fili:
+            print(entry.full_name, loc)
+
     def file_add(self, file_nom: str):
         if self.read_only:
             raise Exception("Tried to write a file to disk opened in read-only mode")
-        empty = fili_locate(self.fat())[1]
+        empty = self.fat.fili_locate()[1]
         allocated = []
         files_plan = {}
         for sector in file_read(file_nom):
@@ -86,7 +112,7 @@ class Disk:
             files_plan[pointer] = sector
             allocated.append(pointer)
         # noinspection PyTypeChecker
-        fat_update(self, allocated)
+        self.fat.update(allocated)
         dir_plan = dir_update(self.root_dir, file_nom)
 
     def file_del(self, nom: str):
@@ -157,6 +183,7 @@ class DiskStruct:
 
 class Fat:
     def __init__(self):
+        # stub
         self._val = ()
 
     def __len__(self):
@@ -168,15 +195,57 @@ class Fat:
     def __getitem__(self, index: int):
         return self._val[index]
 
+    def file_locate(self, pointer: int) -> loc_t:
+        # stub
+        raise StopIteration
+
+    def fili_locate(self) -> tuple[list[loc_t], loc_t]:
+        unchecked = set(range(Fat_Offset, Fat12_Entries))
+        fili = []
+        empty = []
+        while unchecked:
+            pointer = min(unchecked)
+            try:
+                file = self.file_locate(pointer)
+            except DiskReadError as err:
+                rem = err.back
+                if err.code == 0:
+                    empty.append(pointer)
+            except StopIteration:
+                break
+            else:
+                rem = file
+                fili.append(file)
+            unchecked -= set(rem)
+        return fili, empty
+
+    def update(self, allocated: fat_t):
+        # stub
+        pass
+
 
 class Fat12(Fat):
     def __init__(self, buffer: bytes, fat_sz: int):
         super().__init__()
         self._val = fat12_factory(buffer, fat_sz)
 
+    def file_locate(self, pointer: int) -> loc_t:
+        file = []
+        while True:
+            file.append(pointer)
+            try:
+                pointer = self._val[pointer]
+            except IndexError:
+                raise StopIteration
+            if pointer >= 0xFF0 or not pointer:
+                if pointer >= 0xFF8:
+                    break
+                else:
+                    raise DiskReadError(pointer, file)
+        return file
 
-
-
+    def update(self, allocated: fat_t):
+        pass
 
 
 class Fat_ID_Error(Exception):
@@ -252,22 +321,6 @@ class DiskReadError(Exception):
         self.back = back
 
 
-def file_locate(fat: fat_t, pointer: int) -> loc_t:
-    file = []
-    while True:
-        file.append(pointer)
-        try:
-            pointer = fat[pointer]
-        except IndexError:
-            raise StopIteration
-        if pointer >= 0xFF0 or not pointer:
-            if pointer >= 0xFF8:
-                break
-            else:
-                raise DiskReadError(pointer, file)
-    return file
-
-
 def adress_from_fat_index(pointer: int, struct: DiskStruct):
     return (pointer - Fat_Offset) * struct.cluster_sects
 
@@ -281,27 +334,6 @@ def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[i
     back = b"".join(back)
     back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
     return back
-
-
-def fili_locate(fat: fat_t) -> tuple[list[loc_t], loc_t]:
-    unchecked = set(range(Fat_Offset, Fat12_Entries))
-    fili = []
-    empty = []
-    while unchecked:
-        pointer = min(unchecked)
-        try:
-            file = file_locate(fat, pointer)
-        except DiskReadError as err:
-            rem = err.back
-            if err.code == 0:
-                empty.append(pointer)
-        except StopIteration:
-            break
-        else:
-            rem = file
-            fili.append(file)
-        unchecked -= set(rem)
-    return fili, empty
 
 
 def file_entry_from_name(folder: dir_t, nom: str) -> file_entry:
@@ -323,36 +355,6 @@ def file_entry_from_pointer(folder: dir_t, pointer: int) -> file_entry:
     return entry
 
 
-def file_extract(disk: Disk, path: pathlib.Path, nom: str):
-    entry = file_entry_from_name(disk.root_dir, nom)
-    file = file_locate(disk.fat(), entry.first_cluster)
-    with open(path.parent / nom, 'wb') as codex:
-        codex.write(loc_get(disk.img, disk.struct, file, entry.size))
-
-
-def fili_get(disk: Disk, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
-    loci = loci or fili_locate(disk.fat())[0]
-    return ((file_entry_from_pointer(disk.root_dir, loc[0]), loc) for loc in loci)
-
-
-def fili_extract(disk: Disk, path: pathlib.Path, loci: Optional[list[loc_t]] = None):
-    fili = loci or fili_get(disk)
-    folder = path.parent / path.stem
-    try:
-        os.mkdir(folder)
-    except FileExistsError:
-        pass
-    for entry, loc in fili:
-        with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(loc_get(disk.img, disk.struct, loc, entry.size))
-
-
-def loci_print(disk: Disk, loci: Optional[list[loc_t]] = None):
-    fili = fili_get(disk, loci)
-    for entry, loc in fili:
-        print(entry.full_name, loc)
-
-
 def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
 
@@ -361,10 +363,6 @@ class Whence(Enum):
     start = 0
     cursor = 1
     end = 2
-
-
-def fat_update(disk: Disk, allocated: fat_t):
-    pass
 
 
 def dir_update(folder: dir_t, file_nom: str):
@@ -389,10 +387,10 @@ def main():
     scroll = pathlib.Path(scrollnom)
 
     disk = Disk(scroll, read_only=False)
-    fili, emp = fili_locate(disk.fat())
-    loci_print(disk, fili)
+    fili, emp = disk.fat.fili_locate()
+    disk.loci_print(fili)
     print(f"empty {emp}")
-    fili_extract(disk, scroll)
+    disk.fili_extract(scroll)
     disk.file_add(sys.argv[2])
 
 
