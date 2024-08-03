@@ -233,10 +233,16 @@ class Image(SeqWrapper):
         back = []
         for i in file:
             i = adress_from_fat_index(i, struct)
-            back += files_img[i:i + struct.cluster_sects]
+            back += files_img[adress_from_fat_index(i, struct):adress_from_fat_index(i+1, struct)]
         back = b"".join(back)
         back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
         return back
+
+    def file_sect_get(self, struct: DiskStruct, index: int):
+        files_img = ImagePart(self, struct.files_floor, len(self))
+        i = (index - Fat_Offset) * struct.cluster_sects
+        j = i + struct.cluster_sects
+        return files_img[i:j]
 
 
 class ImagePart:
@@ -258,6 +264,7 @@ class ImagePart:
 
     def __contains__(self, item):
         return item in self()
+
 
 
 class Fat(SeqWrapper):
