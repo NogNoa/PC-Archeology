@@ -261,10 +261,9 @@ class ImagePart:
     def __contains__(self, item):
         return item in self()
 
-    def __setitem__(self, index: int, value: bytes):
+    def __setitem__(self, sect_index: int, byte_index: int, value: bytes):
         ln = len(value)
-        write_offset = self.offset + index
-        self.mom[write_offset: write_offset + ln] = list(value)
+        self.mom[self.offset + sect_index][byte_index: byte_index + ln] = value
 
 
 
