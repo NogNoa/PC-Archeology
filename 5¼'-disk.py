@@ -261,6 +261,11 @@ class ImagePart:
     def __contains__(self, item):
         return item in self()
 
+    def __setitem__(self, index: int, value: bytes):
+        ln = len(value)
+        write_offset = self.offset + index
+        self.mom[write_offset: write_offset + ln] = list(value)
+
 
 
 class Fat(SeqWrapper):
