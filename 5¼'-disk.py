@@ -25,7 +25,7 @@ Dir_Entry_sz = 0x20
 
 
 @dataclasses.dataclass
-class file_entry:
+class File_Entry:
     name: str  # 8
     ext: str  # 3
     # 3
@@ -53,8 +53,8 @@ class file_entry:
 image_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
-dir_t = list[file_entry, ...]
-file_desc_t = tuple[file_entry, loc_t]
+dir_t = list[File_Entry, ...]
+file_desc_t = tuple[File_Entry, loc_t]
 
 Whence_Start = 0
 Whence_Cursor = 1
@@ -80,11 +80,14 @@ class Disk:
         print("\n".join(back))
         print(f"{len(self.root_dir)} Files(s)")
 
-    def file_extract(self, disc_path: pathlib.Path, nom: str):
+    def _file_extract_internal(self, folder: pathlib.Path, entry: File_Entry, loc: loc_t):
+        with open(folder / entry.full_name, 'wb') as codex:
+            codex.write(file_get(self.img, self.struct, loc, entry.size))
+
+    def file_extract(self, nom: str):
         entry = self.root_dir[nom]
         loc = self.fat.file_locate(entry.first_cluster)
-        with open(disc_path.parent / entry.full_name, 'wb') as codex:
-            codex.write(file_get(self.img, self.struct, loc, entry.size))
+        self._file_extract_internal(self.path.parent, entry, loc)
 
     def fili_extract(self, loci: Optional[list[loc_t]] = None):
         descri = loci or self.fili_describe()
@@ -93,9 +96,8 @@ class Disk:
             os.mkdir(folder)
         except FileExistsError:
             pass
-        for entry, loc in descri:
-            with open(folder / entry.full_name, 'wb') as codex:
-                codex.write(file_get(self.img, self.struct, loc, entry.size))
+        for couple in descri:
+            self._file_extract_internal(folder, *couple)
 
     def fili_describe(self, loci: Optional[list[loc_t]] = None) -> Iterator[file_desc_t]:
         loci = loci or self.fat.fili_locate()[0]
@@ -294,7 +296,7 @@ class Directory:
     def __contains__(self, item):
         return item in self._val
 
-    def __getitem__(self, item: int | str) -> file_entry:
+    def __getitem__(self, item: int | str) -> File_Entry:
         if isinstance(item, str):
             nom = item.upper()
             sieve = lambda e: nom in {e.name, e.full_name}
@@ -314,7 +316,7 @@ class Directory:
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: BinaryIO, entry: file_entry):
+    def file_del(self, codex: BinaryIO, entry: File_Entry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
@@ -396,7 +398,7 @@ def dir_factory(dir_img: image_t) -> dir_t:
         else:
             continue
         break
-    folder = [file_entry(entry) for entry in folder]
+    folder = [File_Entry(entry) for entry in folder]
     # noinspection PyTypeChecker
     return folder
 
