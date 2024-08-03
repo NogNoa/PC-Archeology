@@ -54,6 +54,7 @@ image_t = tuple[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
 dir_t = list[file_entry, ...]
+file_desc_t = tuple[file_entry, loc_t]
 
 Whence_Start = 0
 Whence_Cursor = 1
@@ -63,7 +64,7 @@ Whence_End = 2
 class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
         self.img = img = disk_factory(scroll_nom, read_only)
-        self.file = scroll_nom
+        self.path = pathlib.Path(scroll_nom)
         self.read_only = read_only
         self.boot = img[0]
         self.struct = struct = DiskStruct(img[1][0])
@@ -79,29 +80,29 @@ class Disk:
         print("\n".join(back))
         print(f"{len(self.root_dir)} Files(s)")
 
-    def file_extract(self, path: pathlib.Path, nom: str):
+    def file_extract(self, disc_path: pathlib.Path, nom: str):
         entry = self.root_dir[nom]
-        file = self.fat.file_locate(entry.first_cluster)
-        with open(path.parent / nom, 'wb') as codex:
-            codex.write(loc_get(self.img, self.struct, file, entry.size))
+        loc = self.fat.file_locate(entry.first_cluster)
+        with open(disc_path.parent / entry.full_name, 'wb') as codex:
+            codex.write(file_get(self.img, self.struct, loc, entry.size))
 
-    def fili_extract(self, path: pathlib.Path, loci: Optional[list[loc_t]] = None):
-        fili = loci or self.fili_get()
-        folder = path.parent / path.stem
+    def fili_extract(self, loci: Optional[list[loc_t]] = None):
+        descri = loci or self.fili_describe()
+        folder = self.path.parent / self.path.stem
         try:
             os.mkdir(folder)
         except FileExistsError:
             pass
-        for entry, loc in fili:
+        for entry, loc in descri:
             with open(folder / entry.full_name, 'wb') as codex:
-                codex.write(loc_get(self.img, self.struct, loc, entry.size))
+                codex.write(file_get(self.img, self.struct, loc, entry.size))
 
-    def fili_get(self, loci: Optional[list[loc_t]] = None) -> Iterator[tuple[file_entry, loc_t]]:
+    def fili_describe(self, loci: Optional[list[loc_t]] = None) -> Iterator[file_desc_t]:
         loci = loci or self.fat.fili_locate()[0]
         return ((self.root_dir[loc[0]], loc) for loc in loci)
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
-        fili = self.fili_get(loci)
+        fili = self.fili_describe(loci)
         for entry, loc in fili:
             print(entry.full_name, loc)
 
@@ -121,10 +122,10 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
-        with open(self.file, mode="ab+") as codex:
-            codex.seek(Fat_Offset, Whence_Start)
+        with open(self.path, mode="ab+") as codex:
+            codex.seek(Sector_sz, Whence_Start)
             self.fat.file_del(codex, entry.first_cluster)
-            codex.seek(self.struct.root_dir_floor, Whence_Start)
+            codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
             self.root_dir.file_del(codex, entry)
             codex.flush()
 
@@ -413,7 +414,7 @@ def adress_from_fat_index(pointer: int, struct: DiskStruct):
     return (pointer - Fat_Offset) * struct.cluster_sects
 
 
-def loc_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
+def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
     files_img = disk_img[struct.files_floor:]
     back = []
     for i in file:
@@ -449,7 +450,7 @@ def main():
     fili, emp = disk.fat.fili_locate()
     disk.loci_print(fili)
     print(f"empty {emp}")
-    disk.fili_extract(scroll)
+    disk.fili_extract()
     disk.file_add(sys.argv[2])
 
 
