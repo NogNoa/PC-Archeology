@@ -63,9 +63,9 @@ Whence_End = 2
 
 class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
-        self.img = img = disk_factory(scroll_nom, read_only)
-        self.path = pathlib.Path(scroll_nom)
         self.read_only = read_only
+        self.path = pathlib.Path(scroll_nom)
+        self.img = img = Image(self.path)
         self.struct = struct = DiskStruct(img[1][0])
         fat = img[1: struct.second_fat_floor]
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
@@ -85,7 +85,7 @@ class Disk:
 
     def _file_extract_internal(self, folder: pathlib.Path, entry: FileEntry, loc: loc_t):
         with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(file_get(self.img, self.struct, loc, entry.size))
+            codex.write(self.img.file_get(self.struct, loc, entry.size))
 
     def file_extract(self, nom: str):
         entry = self.root_dir[nom]
@@ -197,14 +197,42 @@ class DiskStruct:
         return self.root_dir_floor + self.root_dir_sects
 
 
-class ImagePart(image_t):
-    def __init__(self, img: image_t, ):
-        pass
+# class ImagePart(image_t):
+#     def __init__(self, img: image_t, offset: int):
+#         I wanted to use the part like a c pointer that can change the image from the middle
+#         but python is just not like that. The object will have its own local copy of the image.
+
+class Image:
+    def __init__(self, scroll_nom: os.PathLike):
+        self._val = disk_factory(scroll_nom)
+
+    def __len__(self):
+        return len(self._val)
+
+    def __call__(self):
+        return self._val
+
+    def __getitem__(self, index: int):
+        return self._val[index]
+
+    def __contains__(self, item):
+        return item in self._val
+
+    def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
+        files_img = self._val[struct.files_floor:]
+        back = []
+        for i in file:
+            i = adress_from_fat_index(i, struct)
+            back += files_img[i:i + struct.cluster_sects]
+        back = b"".join(back)
+        back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
+        return back
+
 
 class Fat:
     def __init__(self):
         # stub
-        self._val = ()
+        self._val: fat_t = ()
 
     def __len__(self):
         return len(self._val)
@@ -427,15 +455,6 @@ def adress_from_fat_index(pointer: int, struct: DiskStruct):
     return (pointer - Fat_Offset) * struct.cluster_sects
 
 
-def file_get(disk_img: image_t, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
-    files_img = disk_img[struct.files_floor:]
-    back = []
-    for i in file:
-        i = adress_from_fat_index(i, struct)
-        back += files_img[i:i + struct.cluster_sects]
-    back = b"".join(back)
-    back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
-    return back
 
 
 def write_sector(disk: Disk, sector: bytes, pointer: int):
