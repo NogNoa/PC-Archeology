@@ -225,15 +225,11 @@ class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
 
-    def part_get(self):
-        pass
+    def part_get(self, offset: int, mx: int):
+        return ImagePart(self, offset, mx)
 
     def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
-        files_img = self._val[struct.files_floor:]
-        back = []
-        for i in file:
-            i = adress_from_fat_index(i, struct)
-            back += files_img[adress_from_fat_index(i, struct):adress_from_fat_index(i+1, struct)]
+        back = [self.file_sect_get(struct, i) for i in file]
         back = b"".join(back)
         back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
         return back
