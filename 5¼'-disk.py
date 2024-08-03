@@ -25,7 +25,7 @@ Dir_Entry_sz = 0x20
 
 
 @dataclasses.dataclass
-class File_Entry:
+class FileEntry:
     name: str  # 8
     ext: str  # 3
     # 3
@@ -50,11 +50,11 @@ class File_Entry:
         return f"{self.name}.{self.ext}"
 
 
-image_t = tuple[bytes, ...]
+image_t = list[bytes, ...]
 fat_t = tuple[int, ...]
 loc_t = list[int]
-dir_t = list[File_Entry, ...]
-file_desc_t = tuple[File_Entry, loc_t]
+dir_t = list[FileEntry, ...]
+file_desc_t = tuple[FileEntry, loc_t]
 
 Whence_Start = 0
 Whence_Cursor = 1
@@ -66,13 +66,16 @@ class Disk:
         self.img = img = disk_factory(scroll_nom, read_only)
         self.path = pathlib.Path(scroll_nom)
         self.read_only = read_only
-        self.boot = img[0]
         self.struct = struct = DiskStruct(img[1][0])
-        fat = img[1:1 + struct.fat_sects]
+        fat = img[1: struct.second_fat_floor]
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(b''.join(fat), struct.fat_sz)
-        root_dir = self.img[struct.root_dir_floor: struct.files_floor]
+        root_dir = img[struct.root_dir_floor: struct.files_floor]
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
+
+    @property
+    def boot(self):
+        return self.img[0]
 
     def dir(self):
         back = ((e.name, e.ext, e.size, e.write_datetime) for e in self.root_dir)
@@ -80,7 +83,7 @@ class Disk:
         print("\n".join(back))
         print(f"{len(self.root_dir)} Files(s)")
 
-    def _file_extract_internal(self, folder: pathlib.Path, entry: File_Entry, loc: loc_t):
+    def _file_extract_internal(self, folder: pathlib.Path, entry: FileEntry, loc: loc_t):
         with open(folder / entry.full_name, 'wb') as codex:
             codex.write(file_get(self.img, self.struct, loc, entry.size))
 
@@ -152,7 +155,7 @@ class DiskStruct:
         try:
             self.fat_sects = Fat_Sectors[fat_index]
         except IndexError as err:
-            raise Fat_ID_Error(fat_id) from err
+            raise FatIDError(fat_id) from err
         self.track_sects = Track_Sectors[fat_index]
         self.cluster_sects = Cluster_Sectors[fat_index]
         self.root_dir_entries = Root_Dir_Entries[fat_index]
@@ -193,6 +196,10 @@ class DiskStruct:
     def files_floor(self):
         return self.root_dir_floor + self.root_dir_sects
 
+
+class ImagePart(image_t):
+    def __init__(self, img: image_t, ):
+        pass
 
 class Fat:
     def __init__(self):
@@ -300,7 +307,7 @@ class Directory:
     def __contains__(self, item):
         return item in self._val
 
-    def __getitem__(self, item: int | str) -> File_Entry:
+    def __getitem__(self, item: int | str) -> FileEntry:
         if isinstance(item, str):
             nom = item.upper()
             sieve = lambda e: nom in {e.name, e.full_name}
@@ -320,7 +327,7 @@ class Directory:
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: BinaryIO, entry: File_Entry):
+    def file_del(self, codex: BinaryIO, entry: FileEntry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
@@ -342,21 +349,21 @@ class Directory:
         del self._val[index]
 
 
-class Fat_ID_Error(Exception):
+class FatIDError(Exception):
     def __init__(self, fat_id):
         message = f"Fat ID {fat_id:X} is invalid or out of scope due to modernity"
         super().__init__(message)
 
 
-def disk_factory(scroll_nom: str | os.PathLike, read_only: bool) -> image_t:
-    mode = "br" if read_only else "br+"
-    with open(scroll_nom, mode) as file:
+def disk_factory(scroll_nom: str | os.PathLike) -> image_t:
+    with open(scroll_nom, "br") as file:
         scroll = file.read()
     disk = []
     while scroll:
         sector, scroll = scroll[:Sector_sz], scroll[Sector_sz:]
         disk.append(sector)
-    return tuple(disk)
+    # noinspection PyTypeChecker
+    return disk
 
 
 def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
@@ -402,7 +409,7 @@ def dir_factory(dir_img: image_t) -> dir_t:
         else:
             continue
         break
-    folder = [File_Entry(entry) for entry in folder]
+    folder = [FileEntry(entry) for entry in folder]
     # noinspection PyTypeChecker
     return folder
 
