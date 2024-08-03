@@ -3,6 +3,7 @@ import datetime
 import os
 import pathlib
 import sys
+from abc import abstractmethod
 from typing import Optional, BinaryIO
 from collections.abc import Iterator
 
@@ -202,9 +203,10 @@ class DiskStruct:
 #         I wanted to use the part like a c pointer that can change the image from the middle
 #         but python is just not like that. The object will have its own local copy of the image.
 
-class Image:
-    def __init__(self, scroll_nom: os.PathLike):
-        self._val = disk_factory(scroll_nom)
+class SeqWrapper:
+    @abstractmethod
+    def __init__(self):
+        self._val = []
 
     def __len__(self):
         return len(self._val)
@@ -217,6 +219,14 @@ class Image:
 
     def __contains__(self, item):
         return item in self._val
+
+
+class Image(SeqWrapper):
+    def __init__(self, scroll_nom: os.PathLike):
+        self._val = disk_factory(scroll_nom)
+
+    def part_get(self):
+        pass
 
     def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
         files_img = self._val[struct.files_floor:]
@@ -229,25 +239,34 @@ class Image:
         return back
 
 
-class Fat:
-    def __init__(self):
-        # stub
-        self._val: fat_t = ()
+class ImagePart:
+    def __init__(self, img: Image, offset: int, mx: int):
+        self.mom = img
+        self.offset = offset
+        self.max = mx
 
     def __len__(self):
-        return len(self._val)
+        return self.max - self.offset
 
     def __call__(self):
-        return self._val
+        return self.mom[self.offset: self.max]
 
     def __getitem__(self, index: int):
-        return self._val[index]
+        if index > self.__len__():
+            raise IndexError
+        return self.mom[self.offset + index]
 
     def __contains__(self, item):
-        return item in self._val
+        return item in self()
 
+
+class Fat(SeqWrapper):
+    @abstractmethod
+    def __init__(self):
+        self._val: fat_t = ()
+
+    @abstractmethod
     def file_locate(self, pointer: int) -> loc_t:
-        # stub
         raise StopIteration
 
     def fili_locate(self) -> tuple[list[loc_t], loc_t]:
@@ -273,14 +292,13 @@ class Fat:
             unchecked -= set(rem)
         return fili, empty
 
+    @abstractmethod
     def update(self, allocated: fat_t):
-        # stub
         pass
 
 
 class Fat12(Fat):
     def __init__(self, buffer: bytes, fat_sz: int):
-        super().__init__()
         self._val = fat12_factory(buffer, fat_sz)
 
     def file_locate(self, pointer: int) -> loc_t:
@@ -318,22 +336,10 @@ class Fat12(Fat):
             fat_cursor = loc + 4/3
 
 
-class Directory:
+class Directory(SeqWrapper):
     def __init__(self, img, max_size: int):
         self._val = dir_factory(img)
         self.max_size = max_size
-
-    def __len__(self):
-        return len(self._val)
-
-    def __call__(self):
-        return self._val
-
-    def __iter__(self):
-        return self._val.__iter__()
-
-    def __contains__(self, item):
-        return item in self._val
 
     def __getitem__(self, item: int | str) -> FileEntry:
         if isinstance(item, str):
@@ -453,8 +459,6 @@ class DiskReadError(Exception):
 
 def adress_from_fat_index(pointer: int, struct: DiskStruct):
     return (pointer - Fat_Offset) * struct.cluster_sects
-
-
 
 
 def write_sector(disk: Disk, sector: bytes, pointer: int):
