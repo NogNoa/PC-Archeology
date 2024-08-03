@@ -90,7 +90,7 @@ class Disk:
         self._file_extract_internal(self.path.parent, entry, loc)
 
     def fili_extract(self, loci: Optional[list[loc_t]] = None):
-        descri = loci or self.fili_describe()
+        descri = self.fili_describe(loci)
         folder = self.path.parent / self.path.stem
         try:
             os.mkdir(folder)
@@ -216,6 +216,9 @@ class Fat:
         raise StopIteration
 
     def fili_locate(self) -> tuple[list[loc_t], loc_t]:
+        """
+        :return: list of locs for all files + a loc of the empty clusters
+        """
         unchecked = set(range(Fat_Offset, Fat12_Entries))
         fili = []
         empty = []
@@ -265,10 +268,10 @@ class Fat12(Fat):
 
     def file_del(self, codex: BinaryIO, pointer: int):
         file = self.file_locate(pointer)
-        floor = codex.tell()
+        fat_cursor = -2
         for loc in file:
-            offset = floor + loc // 2 * 3
-            codex.seek(offset, Whence_Start)
+            offset = (loc - fat_cursor) * 3 // 2
+            codex.seek(offset, Whence_Cursor)
             b = codex.read(1)
             codex.seek(-1, Whence_Cursor)
             if loc % 2:
@@ -277,6 +280,7 @@ class Fat12(Fat):
             else:
                 codex.write(b'\0')
                 codex.write((b[0] >> 4 << 4).to_bytes())
+            fat_cursor = loc + 4/3
 
 
 class Directory:
