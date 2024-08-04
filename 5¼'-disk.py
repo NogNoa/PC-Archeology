@@ -373,19 +373,16 @@ class Fat12(Fat):
 
     def file_del(self, fat_image: ImagePart, pointer: int):
         file = self.file_locate(pointer)
-        fat_cursor = -2
         fat_image.sect_buff(0)
         for loc in file:
-            offset = (loc - fat_cursor) * 3 // 2
-            fat_image.byte_seek(offset, Whence_Cursor)
-            b = fat_image.read(1, advance=False)
+            offset = (loc * 3 // 2) + 3
+            b = fat_image.buffer[loc]
             if loc % 2:
-                fat_image.write((b[0] % 0x10).to_bytes())
-                fat_image.write(b'\0')
+                fat_image.buffer[offset:offset+1] = ((b % 0x10).to_bytes())
+                fat_image.buffer[offset+1:offset+2] = b'\0'
             else:
-                fat_image.write(b'\0')
-                fat_image.write((b[0] >> 4 << 4).to_bytes())
-            fat_cursor = loc + 4 / 3
+                fat_image.buffer[offset:offset+1] = b'\0'
+                fat_image.buffer[offset+1:offset+2] = (b >> 4 << 4).to_bytes()
 
 
 class Directory(SeqWrapper):
