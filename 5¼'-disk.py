@@ -224,6 +224,11 @@ class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
+        self.sector_curser = self.byte_cursor = 0
+        self.max = len(self._val)
+
+    def __setitem__(self, sect_index: int, value: image_t):
+        self[sect_index: sect_index + len(value)] = value
 
     def part_get(self, offset: int, mx: int):
         return ImagePart(self, offset, mx)
@@ -240,6 +245,18 @@ class Image(SeqWrapper):
         j = i + struct.cluster_sects
         return files_img[i:j]
 
+    def seek(self, sector_offset: int, byte_offset: Optional[int] = 0, whence: Optional[int] = 0):
+        match whence:
+            case 0:
+                self.sector_curser = sector_offset
+                self.byte_cursor = byte_offset
+            case 1:
+                self.sector_curser += sector_offset
+                self.byte_cursor += byte_offset
+            case 2:
+                self.sector_curser = self.max + sector_offset
+                self.byte_cursor = self.max + byte_offset
+    def read(self, byte_offset, ):
 
 class ImagePart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
@@ -262,10 +279,6 @@ class ImagePart(Image):
 
     def __contains__(self, item):
         return item in self()
-
-    def __setitem__(self, sect_index: int, value: image_t):
-        write_offset = self.offset + sect_index
-        self.mom[write_offset: write_offset + len(value)] = value
 
 
 class Fat(SeqWrapper):
