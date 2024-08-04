@@ -374,18 +374,17 @@ class Fat12(Fat):
     def file_del(self, fat_image: ImagePart, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
+        fat_image.sect_buff(0)
         for loc in file:
             offset = (loc - fat_cursor) * 3 // 2
-            fat_image[offset]
-            codex.byte_seek(offset, Whence_Cursor)
-            b = codex.read(1)
-            codex.byte_seek(-1, Whence_Cursor)
+            fat_image.byte_seek(offset, Whence_Cursor)
+            b = fat_image.read(1, advance=False)
             if loc % 2:
-                codex.write((b[0] % 0x10).to_bytes())
-                codex.write(b'\0')
+                fat_image.write((b[0] % 0x10).to_bytes())
+                fat_image.write(b'\0')
             else:
-                codex.write(b'\0')
-                codex.write((b[0] >> 4 << 4).to_bytes())
+                fat_image.write(b'\0')
+                fat_image.write((b[0] >> 4 << 4).to_bytes())
             fat_cursor = loc + 4 / 3
 
 
