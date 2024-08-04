@@ -223,6 +223,7 @@ class SeqWrapper:
 class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
+        self.file = scroll_nom
 
     def part_get(self, offset: int, mx: int):
         return ImagePart(self, offset, mx)
@@ -240,8 +241,10 @@ class Image(SeqWrapper):
         return files_img[i:j]
 
 
-class ImagePart:
-    def __init__(self, img: Image | Self, offset: int, mx: int):
+class ImagePart(Image):
+    def __init__(self, img: Image, offset: int, mx: int):
+        super().__init__(img.file)
+        del self._val
         self.mom = img
         self.offset = offset
         self.max = mx
@@ -260,9 +263,9 @@ class ImagePart:
     def __contains__(self, item):
         return item in self()
 
-    def __setitem__(self, sect_index: int, byte_index: int, value: bytes):
-        ln = len(value)
-        self.mom[self.offset + sect_index][byte_index: byte_index + ln] = value
+    def __setitem__(self, sect_index: int, value: image_t):
+        write_offset = self.offset + sect_index
+        self.mom[write_offset: write_offset + len(value)] = value
 
 
 class Fat(SeqWrapper):
@@ -329,6 +332,7 @@ class Fat12(Fat):
         fat_cursor = -2
         for loc in file:
             offset = (loc - fat_cursor) * 3 // 2
+            fat_image[offset]
             codex.seek(offset, Whence_Cursor)
             b = codex.read(1)
             codex.seek(-1, Whence_Cursor)
