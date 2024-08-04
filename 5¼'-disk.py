@@ -4,7 +4,7 @@ import os
 import pathlib
 import sys
 from abc import abstractmethod
-from typing import Optional, BinaryIO
+from typing import Optional, BinaryIO, Self
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -68,7 +68,7 @@ class Disk:
         self.path = pathlib.Path(scroll_nom)
         self.img = img = Image(self.path)
         self.struct = struct = DiskStruct(img[1][0])
-        fat = img[1: struct.second_fat_floor]
+        fat = img[Reserved_Sectors: struct.second_fat_floor]
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(b''.join(fat), struct.fat_sz)
         root_dir = img[struct.root_dir_floor: struct.files_floor]
@@ -128,12 +128,11 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
-        with open(self.path, mode="ab+") as codex:
-            codex.seek(Sector_sz, Whence_Start)
-            self.fat.file_del(codex, entry.first_cluster)
-            codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
-            self.root_dir.file_del(codex, entry)
-            codex.flush()
+        fat_image = ImagePart(self.img, Reserved_Sectors, self.struct.second_fat_floor)
+        self.fat.file_del(fat_image, entry.first_cluster)
+        # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
+        # self.root_dir.file_del(codex, entry)
+        # codex.flush()
 
 
 @dataclasses.dataclass
@@ -229,12 +228,12 @@ class Image(SeqWrapper):
         return ImagePart(self, offset, mx)
 
     def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
-        back = [self.file_sect_get(struct, i) for i in file]
+        back = [self.file_cluster_get(struct, i) for i in file]
         back = b"".join(back)
         back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
         return back
 
-    def file_sect_get(self, struct: DiskStruct, index: int):
+    def file_cluster_get(self, struct: DiskStruct, index: int):
         files_img = ImagePart(self, struct.files_floor, len(self))
         i = (index - Fat_Offset) * struct.cluster_sects
         j = i + struct.cluster_sects
@@ -242,7 +241,7 @@ class Image(SeqWrapper):
 
 
 class ImagePart:
-    def __init__(self, img: Image, offset: int, mx: int):
+    def __init__(self, img: Image | Self, offset: int, mx: int):
         self.mom = img
         self.offset = offset
         self.max = mx
@@ -264,7 +263,6 @@ class ImagePart:
     def __setitem__(self, sect_index: int, byte_index: int, value: bytes):
         ln = len(value)
         self.mom[self.offset + sect_index][byte_index: byte_index + ln] = value
-
 
 
 class Fat(SeqWrapper):
@@ -326,7 +324,7 @@ class Fat12(Fat):
     def update(self, allocated: fat_t):
         pass
 
-    def file_del(self, codex: BinaryIO, pointer: int):
+    def file_del(self, fat_image: ImagePart, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
         for loc in file:
@@ -340,7 +338,7 @@ class Fat12(Fat):
             else:
                 codex.write(b'\0')
                 codex.write((b[0] >> 4 << 4).to_bytes())
-            fat_cursor = loc + 4/3
+            fat_cursor = loc + 4 / 3
 
 
 class Directory(SeqWrapper):
