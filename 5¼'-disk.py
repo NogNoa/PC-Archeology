@@ -4,7 +4,7 @@ import os
 import pathlib
 import sys
 from abc import abstractmethod
-from typing import Optional, BinaryIO, Self
+from typing import Optional, BinaryIO
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -227,12 +227,13 @@ class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
-        self.byte_cursor = 0
+        self._sect_cursor = None
+        self._byte_cursor = 0
         self.max = len(self._val)
-        self._buffer = bytearray()
+        self.buffer = bytearray()
 
-    def __setitem__(self, sect_index: int, value: image_t):
-        self[sect_index: sect_index + len(value)] = value
+    def __setitem__(self, sect_index: int, value: bytes):
+        self[sect_index] = value
 
     def part_get(self, offset: int, mx: int):
         return ImagePart(self, offset, mx)
@@ -250,32 +251,43 @@ class Image(SeqWrapper):
         return files_img[i:j]
 
     def sect_buff(self, sect_index: int):
-        self._buffer = bytearray(self[sect_index])
+        self.sect_flush()
+        self._sect_cursor = sect_index
+        self.buffer = bytearray(self[sect_index])
+
+    def sect_flush(self):
+        if self._sect_cursor is None:
+            return
+        self[self._sect_cursor] = bytes(self.buffer)
 
     def byte_seek(self, byte_offset: int, whence: Optional[int] = 0):
         match whence:
             case 0:
-                self.byte_cursor = byte_offset
+                self._byte_cursor = byte_offset
             case 1:
-                self.byte_cursor += byte_offset
+                self._byte_cursor += byte_offset
             case 2:
-                self.byte_cursor = Sector_sz + byte_offset
-        self.byte_cursor %= Sector_sz
+                self._byte_cursor = Sector_sz + byte_offset
+        self._byte_cursor %= Sector_sz
 
-    def sect_tell(self)-> Optional[int]:
-        try:
-            return self.index(self._buffer)
-        except ValueError:
-            if not self._buffer:
-                return None
-            else:
-                raise
+    def sect_tell(self) -> Optional[int]:
+        return self._sect_cursor
 
     def byte_tell(self):
-        return self.byte_cursor
+        return self._byte_cursor
 
-    def read(self, byte_offset: int, advance = True):
-        return self._buffer[byte_offset]
+    def read(self, byte_offset: int, advance=True):
+        end = self._byte_cursor + byte_offset
+        back = self.buffer[self._byte_cursor: end]
+        if advance:
+            self._byte_cursor = end
+        return back
+
+    def write(self, value: bytes, advance=True):
+        end = self._byte_cursor + len(value)
+        self.buffer[self._byte_cursor: end] = value
+        if advance:
+            self._byte_cursor = end
 
 class ImagePart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
