@@ -219,13 +219,17 @@ class SeqWrapper:
     def __contains__(self, item):
         return item in self._val
 
+    def index(self, item):
+        return self._val.index(item)
+
 
 class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
-        self.sector_curser = self.byte_cursor = 0
+        self.byte_cursor = 0
         self.max = len(self._val)
+        self._buffer = bytearray()
 
     def __setitem__(self, sect_index: int, value: image_t):
         self[sect_index: sect_index + len(value)] = value
@@ -245,18 +249,33 @@ class Image(SeqWrapper):
         j = i + struct.cluster_sects
         return files_img[i:j]
 
-    def seek(self, sector_offset: int, byte_offset: Optional[int] = 0, whence: Optional[int] = 0):
+    def sect_buff(self, sect_index: int):
+        self._buffer = bytearray(self[sect_index])
+
+    def byte_seek(self, byte_offset: int, whence: Optional[int] = 0):
         match whence:
             case 0:
-                self.sector_curser = sector_offset
                 self.byte_cursor = byte_offset
             case 1:
-                self.sector_curser += sector_offset
                 self.byte_cursor += byte_offset
             case 2:
-                self.sector_curser = self.max + sector_offset
-                self.byte_cursor = self.max + byte_offset
-    def read(self, byte_offset, ):
+                self.byte_cursor = Sector_sz + byte_offset
+        self.byte_cursor %= Sector_sz
+
+    def sect_tell(self)-> Optional[int]:
+        try:
+            return self.index(self._buffer)
+        except ValueError:
+            if not self._buffer:
+                return None
+            else:
+                raise
+
+    def byte_tell(self):
+        return self.byte_cursor
+
+    def read(self, byte_offset: int, advance = True):
+        return self._buffer[byte_offset]
 
 class ImagePart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
@@ -346,9 +365,9 @@ class Fat12(Fat):
         for loc in file:
             offset = (loc - fat_cursor) * 3 // 2
             fat_image[offset]
-            codex.seek(offset, Whence_Cursor)
+            codex.byte_seek(offset, Whence_Cursor)
             b = codex.read(1)
-            codex.seek(-1, Whence_Cursor)
+            codex.byte_seek(-1, Whence_Cursor)
             if loc % 2:
                 codex.write((b[0] % 0x10).to_bytes())
                 codex.write(b'\0')
