@@ -130,8 +130,9 @@ class Disk:
         fat_image = ImagePart(self.img, Reserved_Sectors, self.struct.second_fat_floor)
         self.fat.file_del(fat_image, entry.first_cluster)
         self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = fat_image[:]
+        root_dir_image = ImagePart(self.img, self.struct.root_dir_floor, self.struct.files_floor)
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
-        # self.root_dir.file_del(codex, entry)
+        self.root_dir.file_del(root_dir_image, entry)
         # codex.flush()
 
 
@@ -314,7 +315,6 @@ class ImagePart(Image):
                 raise IndexError
             return self.mom[self.offset + index.start: self.offset + index.stop: index.step]
 
-
     def __contains__(self, item):
         return item in self()
 
@@ -421,21 +421,22 @@ class Directory(SeqWrapper):
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: BinaryIO, entry: FileEntry):
+    def file_del(self, codex: ImagePart, entry: FileEntry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
             if not j:
                 break
             # j has to be finite positive smaller then len(self._val)
-            b = codex.read(1)
+            b = codex.read(1, False)
             if b in {b'', b'\0'}:
                 raise DiskReadError
             elif b[0] != 0xE5:
                 j -= 1
-            codex.seek(Dir_Entry_sz - 1, Whence_Cursor)
+            codex.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
             raise DiskReadError
+
         if index == len(self._val) - 1:
             codex.write(b"\0")
         else:
