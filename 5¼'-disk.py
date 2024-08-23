@@ -127,10 +127,10 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
-        fat_image = ImagePart(self.img, Reserved_Sectors, self.struct.second_fat_floor)
+        fat_image = self.img.part_get(Reserved_Sectors, self.struct.second_fat_floor)
         self.fat.file_del(fat_image, entry.first_cluster)
         self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = fat_image[:]
-        root_dir_image = ImagePart(self.img, self.struct.root_dir_floor, self.struct.files_floor)
+        root_dir_image = self.img.part_get(self.struct.root_dir_floor, self.struct.files_floor)
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
         self.root_dir.file_del(root_dir_image, entry)
         self.img.flush()
@@ -232,12 +232,16 @@ class Image(SeqWrapper):
         self._byte_cursor = 0
         self.max = len(self._val)
         self.buffer = bytearray()
+        self.subscribers = []
 
     def __setitem__(self, sect_index: int, value: bytes):
         self[sect_index] = value
 
     def part_get(self, offset: int, mx: int):
-        return ImagePart(self, offset, mx)
+        mx = mx if mx is not None else self.max
+        part = _ImagePart(self, offset, mx)
+        self.subscribers.append(part)
+        return part
 
     def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
         back = [self.file_cluster_get(struct, i) for i in file]
@@ -246,7 +250,7 @@ class Image(SeqWrapper):
         return back
 
     def file_cluster_get(self, struct: DiskStruct, index: int):
-        files_img = ImagePart(self, struct.files_floor, len(self))
+        files_img = _ImagePart(self, struct.files_floor, len(self))
         i = (index - Fat_Offset) * struct.cluster_sects
         j = i + struct.cluster_sects
         return files_img[i:j]
@@ -290,8 +294,15 @@ class Image(SeqWrapper):
         if advance:
             self._byte_cursor = end
 
+    def flush(self):
+        for sub in self.subscribers:
+            sub.flush()
+        self.sect_flush()
+        with open(self.file, "wb") as codex:
+            codex.write(b''.join(self._val))
 
-class ImagePart(Image):
+
+class _ImagePart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
         super().__init__(img.file)
         del self._val
@@ -317,6 +328,9 @@ class ImagePart(Image):
 
     def __contains__(self, item):
         return item in self()
+
+    def flush(self):
+        self.sect_flush()
 
 
 class Fat(SeqWrapper):
@@ -378,7 +392,7 @@ class Fat12(Fat):
     def update(self, allocated: fat_t):
         pass
 
-    def file_del(self, fat_image: ImagePart, pointer: int):
+    def file_del(self, fat_image: _ImagePart, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
         fat_image.sect_buff(0)
@@ -421,7 +435,7 @@ class Directory(SeqWrapper):
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: ImagePart, entry: FileEntry):
+    def file_del(self, codex: _ImagePart, entry: FileEntry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
