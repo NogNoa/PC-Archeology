@@ -239,7 +239,7 @@ class Image(SeqWrapper):
 
     def part_get(self, offset: int, mx: int):
         mx = mx if mx is not None else self.max
-        part = _ImagePart(self, offset, mx)
+        part = Imagepart(self, offset, mx)
         self.subscribers.append(part)
         return part
 
@@ -250,7 +250,7 @@ class Image(SeqWrapper):
         return back
 
     def file_cluster_get(self, struct: DiskStruct, index: int):
-        files_img = _ImagePart(self, struct.files_floor, len(self))
+        files_img = Imagepart(self, struct.files_floor, len(self))
         i = (index - Fat_Offset) * struct.cluster_sects
         j = i + struct.cluster_sects
         return files_img[i:j]
@@ -294,15 +294,20 @@ class Image(SeqWrapper):
         if advance:
             self._byte_cursor = end
 
+    def iner_flush(self):
+        self.sect_flush()
+        self._sect_cursor = None
+        self.buffer.clear()
+
     def flush(self):
         for sub in self.subscribers:
-            sub.flush()
-        self.sect_flush()
+            sub.iner_flush()
+        self.iner_flush()
         with open(self.file, "wb") as codex:
             codex.write(b''.join(self._val))
 
 
-class _ImagePart(Image):
+class Imagepart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
         super().__init__(img.file)
         del self._val
@@ -329,8 +334,10 @@ class _ImagePart(Image):
     def __contains__(self, item):
         return item in self()
 
-    def flush(self):
-        self.sect_flush()
+    def sect_buff(self, sect_index: int):
+        if sect_index == self.mom._sect_cursor:
+            self.mom.iner_flush()
+        super().sect_buff(sect_index)
 
 
 class Fat(SeqWrapper):
@@ -392,7 +399,7 @@ class Fat12(Fat):
     def update(self, allocated: fat_t):
         pass
 
-    def file_del(self, fat_image: _ImagePart, pointer: int):
+    def file_del(self, fat_image: Imagepart, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
         fat_image.sect_buff(0)
@@ -435,7 +442,7 @@ class Directory(SeqWrapper):
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: _ImagePart, entry: FileEntry):
+    def file_del(self, codex: Imagepart, entry: FileEntry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
