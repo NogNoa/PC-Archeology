@@ -325,9 +325,11 @@ class Imagepart(Image):
                 raise IndexError
             return self.mom[self.offset + index]
         elif isinstance(index, slice):
-            if index.start < 0 or index.stop > self.__len__():
+            start = index.start or 0
+            end = index.stop or self.__len__()
+            if start < 0 or end > self.__len__():
                 raise IndexError
-            return self.mom[self.offset + index.start: self.offset + index.stop: index.step]
+            return self.mom[self.offset + start: self.offset + end: index.step]
 
     def __contains__(self, item):
         return item in self()
