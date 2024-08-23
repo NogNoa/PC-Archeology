@@ -4,7 +4,7 @@ import os
 import pathlib
 import sys
 from abc import abstractmethod
-from typing import Optional, BinaryIO
+from typing import Optional
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -133,7 +133,7 @@ class Disk:
         root_dir_image = ImagePart(self.img, self.struct.root_dir_floor, self.struct.files_floor)
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
         self.root_dir.file_del(root_dir_image, entry)
-        # codex.flush()
+        self.img.flush()
 
 
 @dataclasses.dataclass
@@ -436,7 +436,11 @@ class Directory(SeqWrapper):
             codex.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
             raise DiskReadError
-
+        candidate = codex.read(Dir_Entry_sz, False)
+        try:
+            assert entry == FileEntry(candidate)
+        except AssertionError as e:
+            raise DiskReadError from e
         if index == len(self._val) - 1:
             codex.write(b"\0")
         else:
