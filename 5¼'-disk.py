@@ -68,10 +68,10 @@ class Disk:
         self.path = pathlib.Path(scroll_nom)
         self.img = img = Image(self.path)
         self.struct = struct = DiskStruct(img[1][0])
-        fat: image_t = img[Reserved_Sectors: struct.second_fat_floor]
-        assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
-        self.fat = Fat12(b''.join(fat), struct.fat_sz)
-        root_dir: image_t = img[struct.root_dir_floor: struct.files_floor]
+        fat = img.part_get(Reserved_Sectors, struct.second_fat_floor)
+        self.fat = Fat12(fat, struct.fat_sz)
+        assert self.fat() == img[struct.second_fat_floor: struct.root_dir_floor]
+        root_dir = img.part_get(struct.root_dir_floor, struct.files_floor)
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
 
     @property
@@ -127,12 +127,10 @@ class Disk:
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
-        fat_image = self.img.part_get(Reserved_Sectors, self.struct.second_fat_floor)
-        self.fat.file_del(fat_image, entry.first_cluster)
-        self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = fat_image[:]
-        root_dir_image = self.img.part_get(self.struct.root_dir_floor, self.struct.files_floor)
+        self.fat.file_del(entry.first_cluster)
+        self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = self.fat.img[:]
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
-        self.root_dir.file_del(root_dir_image, entry)
+        self.root_dir.file_del(entry)
         self.img.flush()
 
 
@@ -344,6 +342,7 @@ class Fat(SeqWrapper):
     @abstractmethod
     def __init__(self):
         self._val: fat_t = []
+        self.img = None
 
     @abstractmethod
     def file_locate(self, pointer: int) -> loc_t:
@@ -378,8 +377,11 @@ class Fat(SeqWrapper):
 
 
 class Fat12(Fat):
-    def __init__(self, buffer: bytes, fat_sz: int):
+    def __init__(self, image: Imagepart, fat_sz: int, ):
+        buffer = image[:]
+        buffer = b''.join(buffer)
         self._val = fat12_factory(buffer, fat_sz)
+        self.img = image
 
     def file_locate(self, pointer: int) -> loc_t:
         file = []
@@ -399,28 +401,30 @@ class Fat12(Fat):
     def update(self, allocated: fat_t):
         pass
 
-    def file_del(self, fat_image: Imagepart, pointer: int):
+    def file_del(self, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
-        fat_image.sect_buff(0)
+        self.img.sect_buff(0)
         for loc in file:
             self._val[loc] = 0
             offset = (loc - fat_cursor) * 3 // 2
-            fat_image.byte_seek(offset, Whence_Cursor)
-            b = fat_image.read(1, advance=False)
+            self.img.byte_seek(offset, Whence_Cursor)
+            b = self.img.read(1, advance=False)
             if loc % 2:
-                fat_image.write((b[0] % 0x10).to_bytes())
-                fat_image.write(b'\0')
+                self.img.write((b[0] % 0x10).to_bytes())
+                self.img.write(b'\0')
             else:
-                fat_image.write(b'\0')
-                fat_image.write((b[0] >> 4 << 4).to_bytes())
+                self.img.write(b'\0')
+                self.img.write((b[0] >> 4 << 4).to_bytes())
             fat_cursor = loc + 4 / 3
 
 
 class Directory(SeqWrapper):
-    def __init__(self, img: image_t, max_size: int):
-        self._val = dir_factory(img)
+    def __init__(self, img: Imagepart, max_size: int):
+        buffer: image_t = img[:]
+        self._val = dir_factory(buffer)
         self.max_size = max_size
+        self.img = img
 
     def __getitem__(self, item: int | str) -> FileEntry:
         if isinstance(item, str):
@@ -442,30 +446,30 @@ class Directory(SeqWrapper):
     def update(self, file_nom: str):
         pass
 
-    def file_del(self, codex: Imagepart, entry: FileEntry):
+    def file_del(self, entry: FileEntry):
         index = self._val.index(entry)
         j = index
         for _ in range(self.max_size):
             if not j:
                 break
             # j has to be finite positive smaller then len(self._val)
-            b = codex.read(1, False)
+            b = self.img.read(1, False)
             if b in {b'', b'\0'}:
                 raise DiskReadError
             elif b[0] != 0xE5:
                 j -= 1
-            codex.byte_seek(Dir_Entry_sz, Whence_Cursor)
+            self.img.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
             raise DiskReadError
-        candidate = codex.read(Dir_Entry_sz, False)
+        candidate = self.img.read(Dir_Entry_sz, False)
         try:
             assert entry == FileEntry(candidate)
         except AssertionError as e:
             raise DiskReadError from e
         if index == len(self._val) - 1:
-            codex.write(b"\0")
+            self.img.write(b"\0")
         else:
-            codex.write(b'\xE5')
+            self.img.write(b'\xE5')
         del self._val[index]
 
 
