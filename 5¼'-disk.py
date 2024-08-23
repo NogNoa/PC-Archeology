@@ -51,10 +51,10 @@ class FileEntry:
         return f"{self.name}.{self.ext}"
 
 
-image_t = list[bytes, ...]
-fat_t = tuple[int, ...]
+image_t = list[bytes]
+fat_t = list[int]
 loc_t = list[int]
-dir_t = list[FileEntry, ...]
+dir_t = list[FileEntry]
 file_desc_t = tuple[FileEntry, loc_t]
 
 Whence_Start = 0
@@ -63,15 +63,15 @@ Whence_End = 2
 
 
 class Disk:
-    def __init__(self, scroll_nom: str | os.PathLike, read_only: bool):
+    def __init__(self, scroll_nom: str | os.PathLike, read_only: bool = True):
         self.read_only = read_only
         self.path = pathlib.Path(scroll_nom)
         self.img = img = Image(self.path)
         self.struct = struct = DiskStruct(img[1][0])
-        fat = img[Reserved_Sectors: struct.second_fat_floor]
+        fat: image_t = img[Reserved_Sectors: struct.second_fat_floor]
         assert fat == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(b''.join(fat), struct.fat_sz)
-        root_dir = img[struct.root_dir_floor: struct.files_floor]
+        root_dir: image_t = img[struct.root_dir_floor: struct.files_floor]
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
 
     @property
@@ -122,7 +122,6 @@ class Disk:
             pointer, empty = empty[0], empty[1:]
             files_plan[pointer] = sector
             allocated.append(pointer)
-        # noinspection PyTypeChecker
         self.fat.update(allocated)
         dir_plan = self.root_dir.update(file_nom)
 
@@ -130,6 +129,7 @@ class Disk:
         entry = self.root_dir[nom]
         fat_image = ImagePart(self.img, Reserved_Sectors, self.struct.second_fat_floor)
         self.fat.file_del(fat_image, entry.first_cluster)
+        self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = fat_image[:]
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
         # self.root_dir.file_del(codex, entry)
         # codex.flush()
@@ -289,6 +289,7 @@ class Image(SeqWrapper):
         if advance:
             self._byte_cursor = end
 
+
 class ImagePart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
         super().__init__(img.file)
@@ -303,10 +304,16 @@ class ImagePart(Image):
     def __call__(self):
         return self.mom[self.offset: self.max]
 
-    def __getitem__(self, index: int):
-        if index > self.__len__():
-            raise IndexError
-        return self.mom[self.offset + index]
+    def __getitem__(self, index: int | slice):
+        if isinstance(index, int):
+            if not 0 < index < self.__len__():
+                raise IndexError
+            return self.mom[self.offset + index]
+        elif isinstance(index, slice):
+            if index.start < 0 or index.stop > self.__len__():
+                raise IndexError
+            return self.mom[self.offset + index.start: self.offset + index.stop: index.step]
+
 
     def __contains__(self, item):
         return item in self()
@@ -315,7 +322,7 @@ class ImagePart(Image):
 class Fat(SeqWrapper):
     @abstractmethod
     def __init__(self):
-        self._val: fat_t = ()
+        self._val: fat_t = []
 
     @abstractmethod
     def file_locate(self, pointer: int) -> loc_t:
@@ -373,20 +380,24 @@ class Fat12(Fat):
 
     def file_del(self, fat_image: ImagePart, pointer: int):
         file = self.file_locate(pointer)
+        fat_cursor = -2
         fat_image.sect_buff(0)
         for loc in file:
-            offset = (loc * 3 // 2) + 3
-            b = fat_image.buffer[loc]
+            self._val[loc] = 0
+            offset = (loc - fat_cursor) * 3 // 2
+            fat_image.byte_seek(offset, Whence_Cursor)
+            b = fat_image.read(1, advance=False)
             if loc % 2:
-                fat_image.buffer[offset:offset+1] = ((b % 0x10).to_bytes())
-                fat_image.buffer[offset+1:offset+2] = b'\0'
+                fat_image.write((b[0] % 0x10).to_bytes())
+                fat_image.write(b'\0')
             else:
-                fat_image.buffer[offset:offset+1] = b'\0'
-                fat_image.buffer[offset+1:offset+2] = (b >> 4 << 4).to_bytes()
+                fat_image.write(b'\0')
+                fat_image.write((b[0] >> 4 << 4).to_bytes())
+            fat_cursor = loc + 4 / 3
 
 
 class Directory(SeqWrapper):
-    def __init__(self, img, max_size: int):
+    def __init__(self, img: image_t, max_size: int):
         self._val = dir_factory(img)
         self.max_size = max_size
 
@@ -445,7 +456,6 @@ def disk_factory(scroll_nom: str | os.PathLike) -> image_t:
     while scroll:
         sector, scroll = scroll[:Sector_sz], scroll[Sector_sz:]
         disk.append(sector)
-    # noinspection PyTypeChecker
     return disk
 
 
@@ -462,7 +472,7 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
         table.append(last[0] + 0x100 * (last[1] % 0x10))
     elif end == 1:
         table.append(last[0])
-    return tuple(table)
+    return table
 
 
 def ms_time(call: bytes) -> dict[str, int]:
@@ -493,7 +503,6 @@ def dir_factory(dir_img: image_t) -> dir_t:
             continue
         break
     folder = [FileEntry(entry) for entry in folder]
-    # noinspection PyTypeChecker
     return folder
 
 
@@ -531,7 +540,7 @@ def main():
     scrollnom = sys.argv[1]
     scroll = pathlib.Path(scrollnom)
 
-    disk = Disk(scroll, read_only=False)
+    disk = Disk(scroll, read_only=True)
     fili, emp = disk.fat.fili_locate()
     disk.loci_print(fili)
     print(f"empty {emp}")
