@@ -242,16 +242,16 @@ class Image(SeqWrapper):
         return part
 
     def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
-        back = [self.file_cluster_get(struct, i) for i in file]
-        back = b"".join(back)
-        back = back[:size] if size else back.strip(b"\xF6").strip(b"\x00")
-        return back
+        clusteri = (self.file_cluster_get(struct, i) for i in file)
+        byti = b"".join(b"".join(cluster) for cluster in clusteri)
+        byti = byti[:size] if size else byti.strip(b"\xF6").strip(b"\x00")
+        return byti
 
-    def file_cluster_get(self, struct: DiskStruct, index: int):
+    def file_cluster_get(self, struct: DiskStruct, sect_ind: int) -> image_t:
         files_img = Imagepart(self, struct.files_floor, len(self))
-        i = (index - Fat_Offset) * struct.cluster_sects
-        j = i + struct.cluster_sects
-        return files_img[i:j]
+        this_cluster = (sect_ind - Fat_Offset) * struct.cluster_sects
+        next_cluster = this_cluster + struct.cluster_sects
+        return files_img[this_cluster:next_cluster]
 
     def sect_buff(self, sect_index: int):
         self.sect_flush()
@@ -317,7 +317,7 @@ class Imagepart(Image):
     def __len__(self):
         return self.max - self.offset
 
-    def __call__(self):
+    def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
 
     def __getitem__(self, index: int | slice):
