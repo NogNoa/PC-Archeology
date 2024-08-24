@@ -69,8 +69,8 @@ class Disk:
         self.img = img = Image(self.path)
         self.struct = struct = DiskStruct(img[1][0])
         fat = img.part_get(Reserved_Sectors, struct.second_fat_floor)
+        assert fat() == img[struct.second_fat_floor: struct.root_dir_floor]
         self.fat = Fat12(fat, struct.fat_sz)
-        assert self.fat() == img[struct.second_fat_floor: struct.root_dir_floor]
         root_dir = img.part_get(struct.root_dir_floor, struct.files_floor)
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
 
@@ -226,7 +226,7 @@ class Image(SeqWrapper):
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
-        self._sect_cursor = None
+        self._sect_cursor: Optional[int] = None
         self._byte_cursor = 0
         self.max = len(self._val)
         self.buffer = bytearray()
@@ -309,6 +309,7 @@ class Imagepart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
         super().__init__(img.file)
         del self._val
+        del self.file
         self.mom = img
         self.offset = offset
         self.max = mx
@@ -325,11 +326,19 @@ class Imagepart(Image):
                 raise IndexError
             return self.mom[self.offset + index]
         elif isinstance(index, slice):
-            start = index.start or 0
-            end = index.stop or self.__len__()
-            if start < 0 or end > self.__len__():
+            if index.start is None:
+                start = self.offset
+            elif index.start < 0:
                 raise IndexError
-            return self.mom[self.offset + start: self.offset + end: index.step]
+            else:
+                start = self.offset + index.start
+            if index.stop is None:
+                stop = self.max
+            elif index.stop > self.__len__():
+                raise IndexError
+            else:
+                stop = self.offset + index.stop
+            return self.mom[start: stop: index.step]
 
     def __contains__(self, item):
         return item in self()
@@ -338,6 +347,8 @@ class Imagepart(Image):
         if sect_index == self.mom._sect_cursor:
             self.mom.iner_flush()
         super().sect_buff(sect_index)
+
+
 
 
 class Fat(SeqWrapper):
