@@ -271,6 +271,10 @@ class Image(SeqWrapper):
                 self._byte_cursor += byte_offset
             case 2:
                 self._byte_cursor = Sector_sz + byte_offset
+        if self._byte_cursor < 0:
+            self.sect_buff(self._sect_cursor - 1)
+        elif self._byte_cursor >= Sector_sz:
+            self.sect_buff(self._sect_cursor + 1)
         self._byte_cursor %= Sector_sz
 
     def sect_tell(self) -> Optional[int]:
@@ -477,6 +481,7 @@ class Directory(SeqWrapper):
             self.img.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
             raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
+        self.img.byte_seek(-Dir_Entry_sz, Whence_Cursor)
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
             assert entry == FileEntry(candidate)
