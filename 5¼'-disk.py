@@ -233,7 +233,7 @@ class Image(SeqWrapper):
         self.subscribers = []
 
     def __setitem__(self, sect_index: int, value: bytes):
-        self[sect_index] = value
+        self._val[sect_index] = value
 
     def part_get(self, offset: int, mx: int):
         mx = mx if mx is not None else self.max
@@ -279,12 +279,12 @@ class Image(SeqWrapper):
     def byte_tell(self):
         return self._byte_cursor
 
-    def read(self, byte_offset: int, advance=True):
+    def read(self, byte_offset: int, advance=True) -> bytes:
         end = self._byte_cursor + byte_offset
         back = self.buffer[self._byte_cursor: end]
         if advance:
             self._byte_cursor = end
-        return back
+        return bytes(back)
 
     def write(self, value: bytes, advance=True):
         end = self._byte_cursor + len(value)
@@ -322,7 +322,7 @@ class Imagepart(Image):
 
     def __getitem__(self, index: int | slice):
         if isinstance(index, int):
-            if not 0 < index < self.__len__():
+            if not 0 <= index < self.__len__():
                 raise IndexError
             return self.mom[self.offset + index]
         elif isinstance(index, slice):
@@ -420,7 +420,7 @@ class Fat12(Fat):
         self.img.sect_buff(0)
         for loc in file:
             self._val[loc] = 0
-            offset = (loc - fat_cursor) * 3 // 2
+            offset = int((loc - fat_cursor) * 3 // 2)
             self.img.byte_seek(offset, Whence_Cursor)
             b = self.img.read(1, advance=False)
             if loc % 2:
@@ -583,12 +583,12 @@ def main():
     scrollnom = sys.argv[1]
     scroll = pathlib.Path(scrollnom)
 
-    disk = Disk(scroll, read_only=True)
+    disk = Disk(scroll, read_only=False)
     fili, emp = disk.fat.fili_locate()
     disk.loci_print(fili)
     print(f"empty {emp}")
     disk.fili_extract()
-    disk.file_add(sys.argv[2])
+    disk.file_del("donkey.bas")
 
 
 main()
