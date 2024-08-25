@@ -253,7 +253,7 @@ class Image(SeqWrapper):
         next_cluster = this_cluster + struct.cluster_sects
         return files_img[this_cluster:next_cluster]
 
-    def sect_buff(self, sect_index: int):
+    def sect_buff(self, sect_index: int = 0):
         self.sect_flush()
         self._sect_cursor = sect_index
         self.buffer = bytearray(self[sect_index])
@@ -280,6 +280,8 @@ class Image(SeqWrapper):
         return self._byte_cursor
 
     def read(self, byte_offset: int, advance=True) -> bytes:
+        if self._sect_cursor is None:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
         end = self._byte_cursor + byte_offset
         back = self.buffer[self._byte_cursor: end]
         if advance:
@@ -343,7 +345,7 @@ class Imagepart(Image):
     def __contains__(self, item):
         return item in self()
 
-    def sect_buff(self, sect_index: int):
+    def sect_buff(self, sect_index: int = 0):
         if sect_index == self.mom._sect_cursor:
             self.mom.iner_flush()
         super().sect_buff(sect_index)
@@ -372,7 +374,7 @@ class Fat(SeqWrapper):
             pointer = min(unchecked)
             try:
                 file = self.file_locate(pointer)
-            except DiskReadError as err:
+            except FatReadError as err:
                 rem = err.back
                 if err.code == 0:
                     empty.append(pointer)
@@ -408,7 +410,7 @@ class Fat12(Fat):
                 if pointer >= 0xFF8:
                     break
                 else:
-                    raise DiskReadError(pointer, file)
+                    raise FatReadError(pointer, file)
         return file
 
     def update(self, allocated: fat_t):
@@ -417,7 +419,7 @@ class Fat12(Fat):
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
         fat_cursor = -2
-        self.img.sect_buff(0)
+        self.img.sect_buff()
         for loc in file:
             self._val[loc] = 0
             offset = int((loc - fat_cursor) * 3 // 2)
@@ -462,23 +464,24 @@ class Directory(SeqWrapper):
     def file_del(self, entry: FileEntry):
         index = self._val.index(entry)
         j = index
+        self.img.sect_buff()
         for _ in range(self.max_size):
             if not j:
                 break
             # j has to be finite positive smaller then len(self._val)
             b = self.img.read(1, False)
             if b in {b'', b'\0'}:
-                raise DiskReadError
+                raise DirReadError(f"{entry.name}; read {b} at entry {index - j} address directory:{self.img.byte_tell(): x}")
             elif b[0] != 0xE5:
                 j -= 1
             self.img.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
-            raise DiskReadError
+            raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
             assert entry == FileEntry(candidate)
         except AssertionError as e:
-            raise DiskReadError from e
+            raise DirReadError(f"{entry} \ndiffer from \n{FileEntry(candidate)}")
         if index == len(self._val) - 1:
             self.img.write(b"\0")
         else:
@@ -549,13 +552,17 @@ def dir_factory(dir_img: image_t) -> dir_t:
     return folder
 
 
-class DiskReadError(Exception):
+class FatReadError(Exception):
     def __init__(self, code, back):
         opt = "Empty" if code == 0 else "Bad" if code == 0xFF7 else "Reserved"
         message = f"Read Error: {opt} cluster"
         super().__init__(message)
         self.code = code
         self.back = back
+
+
+class DirReadError(Exception):
+    pass
 
 
 def adress_from_fat_index(pointer: int, struct: DiskStruct):
