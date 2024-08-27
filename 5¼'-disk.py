@@ -264,17 +264,19 @@ class Image(SeqWrapper):
         self[self._sect_cursor] = bytes(self.buffer)
 
     def byte_seek(self, byte_offset: int, whence: Optional[int] = 0):
+        if abs(byte_offset) >  Sector_sz:
+            raise Exception("for movements of more than a sector use sect_buff() instead")
         match whence:
             case 0:
                 self._byte_cursor = byte_offset
             case 1:
                 self._byte_cursor += byte_offset
+                if self._byte_cursor < 0:
+                    self.sect_buff(self._sect_cursor - 1)
+                elif self._byte_cursor >= Sector_sz:
+                    self.sect_buff(self._sect_cursor + 1)
             case 2:
                 self._byte_cursor = Sector_sz + byte_offset
-        if self._byte_cursor < 0:
-            self.sect_buff(self._sect_cursor - 1)
-        elif self._byte_cursor >= Sector_sz:
-            self.sect_buff(self._sect_cursor + 1)
         self._byte_cursor %= Sector_sz
 
     def sect_tell(self) -> Optional[int]:
@@ -326,6 +328,9 @@ class Imagepart(Image):
     def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
 
+    def __setitem__(self, sect_index: int, value: bytes):
+        self.mom[sect_index] = value
+
     def __getitem__(self, index: int | slice):
         if isinstance(index, int):
             if not 0 <= index < self.__len__():
@@ -353,8 +358,6 @@ class Imagepart(Image):
         if sect_index == self.mom._sect_cursor:
             self.mom.iner_flush()
         super().sect_buff(sect_index)
-
-
 
 
 class Fat(SeqWrapper):
@@ -475,17 +478,17 @@ class Directory(SeqWrapper):
             # j has to be finite positive smaller then len(self._val)
             b = self.img.read(1, False)
             if b in {b'', b'\0'}:
-                raise DirReadError(f"{entry.name}; read {b} at entry {index - j} address directory:{self.img.byte_tell(): x}")
+                raise DirReadError(f"{entry.name}; read {b} at entry {index - j} "
+                                   f"address directory:{self.img.byte_tell(): x}")
             elif b[0] != 0xE5:
                 j -= 1
             self.img.byte_seek(Dir_Entry_sz, Whence_Cursor)
         else:
             raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
-        self.img.byte_seek(-Dir_Entry_sz, Whence_Cursor)
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
             assert entry == FileEntry(candidate)
-        except AssertionError as e:
+        except AssertionError:
             raise DirReadError(f"{entry} \ndiffer from \n{FileEntry(candidate)}")
         if index == len(self._val) - 1:
             self.img.write(b"\0")
