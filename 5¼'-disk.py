@@ -86,7 +86,7 @@ class Disk:
 
     def _file_extract_internal(self, folder: pathlib.Path, entry: FileEntry, loc: loc_t):
         with open(folder / entry.full_name, 'wb') as codex:
-            codex.write(self.img.file_get(self.struct, loc, entry.size))
+            codex.write(self.file_get(loc, entry.size))
 
     def file_extract(self, nom: str):
         entry = self.root_dir[nom]
@@ -106,6 +106,18 @@ class Disk:
     def fili_describe(self, loci: Optional[list[loc_t]] = None) -> Iterator[file_desc_t]:
         loci = loci or self.fat.fili_locate()[0]
         return ((self.root_dir[loc[0]], loc) for loc in loci)
+
+    def file_get(self, file: loc_t, size: Optional[int] = None) -> bytes:
+        clusteri = (self.file_cluster_get(i) for i in file)
+        byti = b"".join(b"".join(cluster) for cluster in clusteri)
+        byti = byti[:size] if size else byti.strip(b"\xF6").strip(b"\x00")
+        return byti
+
+    def file_cluster_get(self, sect_ind: int) -> image_t:
+        files_img = self.img.part_get(self.struct.files_floor, len(self.img))
+        this_cluster = (sect_ind - Fat_Offset) * self.struct.cluster_sects
+        next_cluster = this_cluster + self.struct.cluster_sects
+        return files_img[this_cluster:next_cluster]
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_describe(loci)
@@ -240,18 +252,6 @@ class Image(SeqWrapper):
         part = Imagepart(self, offset, mx)
         self.subscribers.append(part)
         return part
-
-    def file_get(self, struct: DiskStruct, file: loc_t, size: Optional[int] = None) -> bytes:
-        clusteri = (self.file_cluster_get(struct, i) for i in file)
-        byti = b"".join(b"".join(cluster) for cluster in clusteri)
-        byti = byti[:size] if size else byti.strip(b"\xF6").strip(b"\x00")
-        return byti
-
-    def file_cluster_get(self, struct: DiskStruct, sect_ind: int) -> image_t:
-        files_img = Imagepart(self, struct.files_floor, len(self))
-        this_cluster = (sect_ind - Fat_Offset) * struct.cluster_sects
-        next_cluster = this_cluster + struct.cluster_sects
-        return files_img[this_cluster:next_cluster]
 
     def sect_buff(self, sect_index: int = 0):
         self.sect_flush()
