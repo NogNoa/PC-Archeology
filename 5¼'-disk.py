@@ -263,20 +263,15 @@ class Image(SeqWrapper):
             return
         self[self._sect_cursor] = bytes(self.buffer)
 
-    def byte_seek(self, byte_offset: int, whence: Optional[int] = 0):
-        if abs(byte_offset) >  Sector_sz:
-            raise Exception("for movements of more than a sector use sect_buff() instead")
-        match whence:
-            case 0:
-                self._byte_cursor = byte_offset
-            case 1:
-                self._byte_cursor += byte_offset
-                if self._byte_cursor < 0:
-                    self.sect_buff(self._sect_cursor - 1)
-                elif self._byte_cursor >= Sector_sz:
-                    self.sect_buff(self._sect_cursor + 1)
-            case 2:
-                self._byte_cursor = Sector_sz + byte_offset
+    def byte_seek_abs(self, byte_offset: int):
+        self._byte_cursor = byte_offset % Sector_sz
+
+    def byte_seek_rel(self, byte_offset: int):
+        self._byte_cursor += byte_offset
+        if self._byte_cursor < 0:
+            self.sect_buff(self._sect_cursor - 1)
+        elif self._byte_cursor >= Sector_sz:
+            self.sect_buff(self._sect_cursor + 1)
         self._byte_cursor %= Sector_sz
 
     def sect_tell(self) -> Optional[int]:
@@ -430,7 +425,7 @@ class Fat12(Fat):
         for loc in file:
             self._val[loc] = 0
             offset = int((loc - fat_cursor) * 3 // 2)
-            self.img.byte_seek(offset, Whence_Cursor)
+            self.img.byte_seek_rel(offset)
             b = self.img.read(1, advance=False)
             if loc % 2:
                 self.img.write((b[0] % 0x10).to_bytes())
@@ -482,7 +477,7 @@ class Directory(SeqWrapper):
                                    f"address directory:{self.img.byte_tell(): x}")
             elif b[0] != 0xE5:
                 j -= 1
-            self.img.byte_seek(Dir_Entry_sz, Whence_Cursor)
+            self.img.byte_seek_rel(Dir_Entry_sz)
         else:
             raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
         candidate = self.img.read(Dir_Entry_sz, False)
