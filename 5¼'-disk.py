@@ -264,9 +264,11 @@ class Image(SeqWrapper):
         self[self._sect_cursor] = bytes(self.buffer)
 
     def byte_seek_abs(self, byte_offset: int):
+        assert abs(byte_offset) < Sector_sz
         self._byte_cursor = byte_offset % Sector_sz
 
     def byte_seek_rel(self, byte_offset: int):
+        assert abs(byte_offset) < Sector_sz
         self._byte_cursor += byte_offset
         if self._byte_cursor < 0:
             self.sect_buff(self._sect_cursor - 1)
@@ -324,7 +326,7 @@ class Imagepart(Image):
         return self.mom[self.offset: self.max]
 
     def __setitem__(self, sect_index: int, value: bytes):
-        self.mom[sect_index] = value
+        self.mom[self.offset + sect_index] = value
 
     def __getitem__(self, index: int | slice) -> image_t:
         if isinstance(index, int):
@@ -352,6 +354,8 @@ class Imagepart(Image):
     def sect_buff(self, sect_index: int = 0):
         if sect_index == self.mom._sect_cursor:
             self.mom.iner_flush()
+        if not 0 <= sect_index < self.__len__():
+            raise IndexError
         super().sect_buff(sect_index)
 
 
@@ -424,7 +428,7 @@ class Fat12(Fat):
         self.img.sect_buff()
         for loc in file:
             self._val[loc] = 0
-            offset = int((loc - fat_cursor) * 3 // 2)
+            offset = (loc - fat_cursor) * 2 // 3
             self.img.byte_seek_rel(offset)
             b = self.img.read(1, advance=False)
             if loc % 2:
@@ -433,7 +437,7 @@ class Fat12(Fat):
             else:
                 self.img.write(b'\0')
                 self.img.write((b[0] >> 4 << 4).to_bytes())
-            fat_cursor = loc + 4 / 3
+            fat_cursor = loc + 3
 
 
 class Directory(SeqWrapper):
