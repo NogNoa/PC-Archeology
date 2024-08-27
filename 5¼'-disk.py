@@ -16,11 +16,10 @@ Hidden_Sector_Numb = 0
 First_Physical_sector = 1  # under CHS
 Fat_Offset = Reserved_Sectors + 1
 
-Capacity = (320, 160, 360, 180)  # in KB
 Track_Sectors = (8, 8, 9, 9)
-Heads = (2, 1, 2, 1)
+Head_Numb = (2, 1, 2, 1)
 Fat_Sectors = (1, 1, 2, 2)
-Cluster_Sectors = (2, 1, 2, 1)  # virtual cluster in physical sectors
+Cluster_Sectors = (2, 1, 2, 1)  # physical sectors in a virtual cluster
 Root_Dir_Entries = (0x70, 0x40, 0x70, 0x40)
 Dir_Entry_sz = 0x20
 
@@ -149,16 +148,22 @@ class Disk:
 @dataclasses.dataclass
 class DiskStruct:
     fat_id: int
+
     fat_sects: int
     track_sects: int
     cluster_sects: int
+    root_dir_sects: int
+
     root_dir_entries: int
+
+    head_numb: int
+    sect_numb: int
 
     fat_sz: int
     track_sz: int
     cluster_sz: int
     root_dir_sz: int
-    root_dir_sects: int
+    capacity: int
 
     def __init__(self, fat_id):
         self.fat_id = fat_id
@@ -170,6 +175,7 @@ class DiskStruct:
         self.track_sects = Track_Sectors[fat_index]
         self.cluster_sects = Cluster_Sectors[fat_index]
         self.root_dir_entries = Root_Dir_Entries[fat_index]
+        self.head_numb = Head_Numb[fat_index]
 
     @property
     def fat_sz(self) -> int:
@@ -192,8 +198,16 @@ class DiskStruct:
         return self.root_dir_entries * Dir_Entry_sz
 
     @property
+    def capacity(self) -> int:
+        return Sector_sz * self.sector_numb
+
+    @property
     def root_dir_sects(self) -> int:
         return self.root_dir_entries // 0x10
+
+    @property
+    def sector_numb(self) -> int:
+        return Cylinders * self.head_numb * self.track_sects
 
     @property
     def second_fat_floor(self) -> int:
