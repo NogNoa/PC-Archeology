@@ -4,7 +4,7 @@ import os
 import pathlib
 import sys
 from abc import abstractmethod
-from typing import Optional
+from typing import Optional, Generator
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -47,7 +47,7 @@ class FileEntry:
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
 
     @property
-    def full_name(self):
+    def full_name(self) -> str:
         return f"{self.name}.{self.ext}"
 
 
@@ -75,7 +75,7 @@ class Disk:
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
 
     @property
-    def boot(self):
+    def boot(self) -> image_t:
         return self.img[0]
 
     def dir(self):
@@ -172,39 +172,39 @@ class DiskStruct:
         self.root_dir_entries = Root_Dir_Entries[fat_index]
 
     @property
-    def fat_sz(self):
+    def fat_sz(self) -> int:
         return self.fat_sects * Sector_sz
 
     @property
-    def fati_clusters(self):
-        return self.fat_sects * Fat_Numb / self.cluster_sects
+    def fati_clusters(self) -> int:
+        return self.fat_sects * Fat_Numb // self.cluster_sects
 
     @property
-    def track_sz(self):
+    def track_sz(self) -> int:
         return self.track_sects * Sector_sz
 
     @property
-    def cluster_sz(self):
+    def cluster_sz(self) -> int:
         return self.cluster_sects * Sector_sz
 
     @property
-    def root_dir_sz(self):
+    def root_dir_sz(self) -> int:
         return self.root_dir_entries * Dir_Entry_sz
 
     @property
-    def root_dir_sects(self):
+    def root_dir_sects(self) -> int:
         return self.root_dir_entries // 0x10
 
     @property
-    def second_fat_floor(self):
+    def second_fat_floor(self) -> int:
         return 1 + self.fat_sects
 
     @property
-    def root_dir_floor(self):
+    def root_dir_floor(self) -> int:
         return 1 + Fat_Numb * self.fat_sects
 
     @property
-    def files_floor(self):
+    def files_floor(self) -> int:
         return self.root_dir_floor + self.root_dir_sects
 
 
@@ -218,19 +218,19 @@ class SeqWrapper:
     def __init__(self):
         self._val = []
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._val)
 
-    def __call__(self):
+    def __call__(self) -> list:
         return self._val
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> any:
         return self._val[index]
 
     def __contains__(self, item):
         return item in self._val
 
-    def index(self, item):
+    def index(self, item) -> int:
         return self._val.index(item)
 
 
@@ -247,7 +247,7 @@ class Image(SeqWrapper):
     def __setitem__(self, sect_index: int, value: bytes):
         self._val[sect_index] = value
 
-    def part_get(self, offset: int, mx: int):
+    def part_get(self, offset: int, mx: int) -> "Imagepart":
         mx = mx if mx is not None else self.max
         part = Imagepart(self, offset, mx)
         self.subscribers.append(part)
@@ -277,7 +277,7 @@ class Image(SeqWrapper):
     def sect_tell(self) -> Optional[int]:
         return self._sect_cursor
 
-    def byte_tell(self):
+    def byte_tell(self) -> int:
         return self._byte_cursor
 
     def read(self, byte_offset: int, advance=True) -> bytes:
@@ -317,7 +317,7 @@ class Imagepart(Image):
         self.offset = offset
         self.max = mx
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.max - self.offset
 
     def __call__(self) -> image_t:
@@ -326,7 +326,7 @@ class Imagepart(Image):
     def __setitem__(self, sect_index: int, value: bytes):
         self.mom[sect_index] = value
 
-    def __getitem__(self, index: int | slice):
+    def __getitem__(self, index: int | slice) -> image_t:
         if isinstance(index, int):
             if not 0 <= index < self.__len__():
                 raise IndexError
@@ -346,7 +346,7 @@ class Imagepart(Image):
                 stop = self.offset + index.stop
             return self.mom[start: stop: index.step]
 
-    def __contains__(self, item):
+    def __contains__(self, item) -> bool:
         return item in self()
 
     def sect_buff(self, sect_index: int = 0):
@@ -568,7 +568,7 @@ class DirReadError(Exception):
     pass
 
 
-def adress_from_fat_index(pointer: int, struct: DiskStruct):
+def adress_from_fat_index(pointer: int, struct: DiskStruct) -> int:
     return (pointer - Fat_Offset) * struct.cluster_sects
 
 
@@ -576,7 +576,7 @@ def write_sector(disk: Disk, sector: bytes, pointer: int):
     pass
 
 
-def file_read(file_nom: str):
+def file_read(file_nom: str) -> Generator[any, bytes, None]:
     with open(file_nom, mode="rb") as file:
         while sector := file.read(Sector_sz):
             yield sector
