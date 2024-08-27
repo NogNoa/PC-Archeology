@@ -428,7 +428,7 @@ class Fat12(Fat):
         self.img.sect_buff()
         for loc in file:
             self._val[loc] = 0
-            offset = (loc - fat_cursor) * 2 // 3
+            offset = loc * 3 // 2 - fat_cursor
             self.img.byte_seek_rel(offset)
             b = self.img.read(1, advance=False)
             if loc % 2:
@@ -437,7 +437,7 @@ class Fat12(Fat):
             else:
                 self.img.write(b'\0')
                 self.img.write((b[0] >> 4 << 4).to_bytes())
-            fat_cursor = loc + 3
+            fat_cursor = 2
 
 
 class Directory(SeqWrapper):
