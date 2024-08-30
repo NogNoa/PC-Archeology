@@ -113,10 +113,9 @@ class Disk:
         return byti
 
     def file_cluster_get(self, sect_ind: int) -> image_t:
-        files_img = self.img.part_get(self.struct.files_floor, len(self.img))
         this_cluster = (sect_ind - Fat_Offset) * self.struct.cluster_sects
         next_cluster = this_cluster + self.struct.cluster_sects
-        return files_img[this_cluster:next_cluster]
+        return self.img[self.struct.files_floor:][this_cluster:next_cluster]
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_describe(loci)
@@ -152,18 +151,19 @@ class DiskStruct:
     fat_sects: int
     track_sects: int
     cluster_sects: int
-    root_dir_sects: int
 
     root_dir_entries: int
 
     head_numb: int
-    sect_numb: int
+
+    root_dir_sects: int
+    sector_numb: int
 
     fat_sz: int
     track_sz: int
     cluster_sz: int
     root_dir_sz: int
-    capacity: int
+    disk_sz: int
 
     def __init__(self, fat_id):
         self.fat_id = fat_id
@@ -198,7 +198,7 @@ class DiskStruct:
         return self.root_dir_entries * Dir_Entry_sz
 
     @property
-    def capacity(self) -> int:
+    def disk_sz(self) -> int:
         return Sector_sz * self.sector_numb
 
     @property
