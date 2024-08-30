@@ -138,6 +138,7 @@ class Disk:
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
         self.fat.file_del(entry.first_cluster)
+        self.fat.img.flush()
         self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = self.fat.img[:]
         # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
         self.root_dir.file_del(entry)
@@ -372,6 +373,9 @@ class Imagepart(Image):
             raise IndexError
         super().sect_buff(sect_index)
 
+    def flush(self):
+        self.iner_flush()
+
 
 class Fat(SeqWrapper):
     @abstractmethod
@@ -471,8 +475,7 @@ class Directory(SeqWrapper):
         try:
             entry = tuple(filter(sieve, self._val))[0]
         except IndexError:
-            print(err_massage, sys.stderr)
-            raise
+            raise DirReadError(err_massage)
         return entry
 
     def update(self, file_nom: str):
