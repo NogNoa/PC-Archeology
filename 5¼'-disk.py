@@ -4,7 +4,7 @@ import os
 import pathlib
 import sys
 from abc import abstractmethod
-from typing import Optional, Generator
+from typing import Optional, Generator, TypeAlias
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -50,11 +50,11 @@ class FileEntry:
         return f"{self.name}.{self.ext}"
 
 
-image_t = list[bytes]
-fat_t = list[int]
-loc_t = list[int]
-dir_t = list[FileEntry]
-file_desc_t = tuple[FileEntry, loc_t]
+image_t : TypeAlias = list[bytes]
+fat_t : TypeAlias = list[int]
+loc_t : TypeAlias = list[int]
+dir_t : TypeAlias = list[FileEntry]
+file_desc_t : TypeAlias = tuple[FileEntry, loc_t]
 
 Whence_Start = 0
 Whence_Cursor = 1
@@ -138,11 +138,13 @@ class Disk:
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
         self.fat.file_del(entry.first_cluster)
-        self.fat.img.flush()
-        self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = self.fat.img[:]
-        # codex.seek(self.struct.root_dir_floor * Sector_sz, Whence_Start)
+        self.sync_other_fats()
         self.root_dir.file_del(entry)
         self.img.flush()
+
+    def sync_other_fats(self):
+        self.fat.img.flush()
+        self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = self.fat.img[:]
 
 
 @dataclasses.dataclass
