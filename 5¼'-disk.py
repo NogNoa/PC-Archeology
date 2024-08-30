@@ -128,13 +128,22 @@ class Disk:
             raise Exception("Tried to write a file to disk opened in read-only mode")
         empty = self.fat.fili_locate()[1]
         allocated = []
-        files_plan = {}
-        for sector in file_read(file_nom):
+        cluster = []
+        for ind, sector in enumerate(file_read(file_nom)):
+            if ind % self.struct.cluster_sects:
+                cluster.append(sector)
+            else:
+                pointer, empty = empty[0], empty[1:]
+                self.fili_img[self.cluster_slice_get(pointer)] = cluster
+                cluster.clear()
+                allocated.append(pointer)
+        if cluster:
+            cluster += [b'\0' * Sector_sz] * (self.struct.cluster_sects - len(cluster))
             pointer, empty = empty[0], empty[1:]
-            self.fili_img[self.cluster_slice_get(pointer)] = sector
+            self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
-        dir_plan = self.root_dir.file_add(file_nom)
+        self.root_dir.file_add(file_nom, allocated[0])
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
@@ -343,14 +352,13 @@ class Imagepart(Image):
     def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
 
-    def __setitem__(self, sect_index: int | slice, value: bytes| image_t):
+    def __setitem__(self, sect_index: int | slice, value: bytes | image_t):
         if isinstance(sect_index, int):
             if not isinstance(value, bytes): raise TypeError
             self.mom[self.offset + sect_index] = value
         elif isinstance(sect_index, slice):
             if not isinstance(value, list) and isinstance(value[0], bytes): raise TypeError
             self.mom[self.offset + sect_index.start: self.offset + sect_index.stop] = value
-
 
     def __getitem__(self, index: int | slice) -> image_t:
         if isinstance(index, int):
@@ -420,7 +428,11 @@ class Fat(SeqWrapper):
         return fili, empty
 
     @abstractmethod
-    def update(self, allocated: fat_t):
+    def file_add(self, allocated: fat_t):
+        pass
+
+    @abstractmethod
+    def file_del(self, allocated: fat_t):
         pass
 
 
@@ -487,7 +499,7 @@ class Directory(SeqWrapper):
             raise DirReadError(err_massage)
         return entry
 
-    def file_add(self, file_nom: str):
+    def file_add(self, file_nom: str, pointer: int):
         pass
 
     def file_del(self, entry: FileEntry):
@@ -597,10 +609,6 @@ class DirReadError(Exception):
 
 def adress_from_fat_index(pointer: int, struct: DiskStruct) -> int:
     return (pointer - Fat_Offset) * struct.cluster_sects
-
-
-def write_sector(disk: Disk, sector: bytes, pointer: int):
-    pass
 
 
 def file_read(file_nom: str) -> Generator[any, bytes, None]:
