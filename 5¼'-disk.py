@@ -72,6 +72,7 @@ class Disk:
         self.fat = Fat12(fat, struct.fat_sz)
         root_dir = img.part_get(struct.root_dir_floor, struct.files_floor)
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
+        self.fili_img = self.img.part_get(self.struct.files_floor)
 
     @property
     def boot(self) -> image_t:
@@ -107,15 +108,15 @@ class Disk:
         return ((self.root_dir[loc[0]], loc) for loc in loci)
 
     def file_get(self, file: loc_t, size: Optional[int] = None) -> bytes:
-        clusteri = (self.file_cluster_get(i) for i in file)
+        clusteri = (self.fili_img[self.cluster_slice_get(i)] for i in file)
         byti = b"".join(b"".join(cluster) for cluster in clusteri)
         byti = byti[:size] if size else byti.strip(b"\xF6").strip(b"\x00")
         return byti
 
-    def file_cluster_get(self, sect_ind: int) -> image_t:
+    def cluster_slice_get(self, sect_ind: int) -> slice:
         this_cluster = (sect_ind - Fat_Offset) * self.struct.cluster_sects
         next_cluster = this_cluster + self.struct.cluster_sects
-        return self.img[self.struct.files_floor:][this_cluster:next_cluster]
+        return slice(this_cluster, next_cluster)
 
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_describe(loci)
@@ -130,10 +131,10 @@ class Disk:
         files_plan = {}
         for sector in file_read(file_nom):
             pointer, empty = empty[0], empty[1:]
-            files_plan[pointer] = sector
+            self.fili_img[self.cluster_slice_get(pointer)] = sector
             allocated.append(pointer)
-        self.fat.update(allocated)
-        dir_plan = self.root_dir.update(file_nom)
+        self.fat.file_add(allocated)
+        dir_plan = self.root_dir.file_add(file_nom)
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
@@ -264,7 +265,7 @@ class Image(SeqWrapper):
     def __setitem__(self, sect_index: int, value: bytes):
         self._val[sect_index] = value
 
-    def part_get(self, offset: int, mx: int) -> "Imagepart":
+    def part_get(self, offset: int, mx: int = None) -> "Imagepart":
         mx = mx if mx is not None else self.max
         part = Imagepart(self, offset, mx)
         self.subscribers.append(part)
@@ -342,8 +343,14 @@ class Imagepart(Image):
     def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
 
-    def __setitem__(self, sect_index: int, value: bytes):
-        self.mom[self.offset + sect_index] = value
+    def __setitem__(self, sect_index: int | slice, value: bytes| image_t):
+        if isinstance(sect_index, int):
+            if not isinstance(value, bytes): raise TypeError
+            self.mom[self.offset + sect_index] = value
+        elif isinstance(sect_index, slice):
+            if not isinstance(value, list) and isinstance(value[0], bytes): raise TypeError
+            self.mom[self.offset + sect_index.start: self.offset + sect_index.stop] = value
+
 
     def __getitem__(self, index: int | slice) -> image_t:
         if isinstance(index, int):
@@ -439,7 +446,7 @@ class Fat12(Fat):
                     raise FatReadError(pointer, file)
         return file
 
-    def update(self, allocated: fat_t):
+    def file_add(self, alocated: fat_t):
         pass
 
     def file_del(self, pointer: int):
@@ -480,7 +487,7 @@ class Directory(SeqWrapper):
             raise DirReadError(err_massage)
         return entry
 
-    def update(self, file_nom: str):
+    def file_add(self, file_nom: str):
         pass
 
     def file_del(self, entry: FileEntry):
