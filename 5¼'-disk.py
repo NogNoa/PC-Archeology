@@ -129,19 +129,22 @@ class Disk:
         empty = self.fat.fili_locate()[1]
         allocated = []
         cluster = []
-        for ind, sector in enumerate(file_read(file_nom)):
-            if ind % self.struct.cluster_sects:
-                cluster.append(sector)
-            else:
+        sectors = file_read(file_nom)
+        while True:
+            try:
+                for ind in range(self.struct.cluster_sects):
+                    sector = next(sectors)
+                    cluster.append(sector)
                 pointer, empty = empty[0], empty[1:]
                 self.fili_img[self.cluster_slice_get(pointer)] = cluster
                 cluster.clear()
                 allocated.append(pointer)
-        if cluster:
-            cluster += [b'\0' * Sector_sz] * (self.struct.cluster_sects - len(cluster))
-            pointer, empty = empty[0], empty[1:]
-            self.fili_img[self.cluster_slice_get(pointer)] = cluster
-            allocated.append(pointer)
+            except StopIteration:
+                cluster += [b'\0' * Sector_sz] * (self.struct.cluster_sects - len(cluster))
+                pointer, empty = empty[0], empty[1:]
+                self.fili_img[self.cluster_slice_get(pointer)] = cluster
+                allocated.append(pointer)
+                break
         self.fat.file_add(allocated)
         self.root_dir.file_add(file_nom, allocated[0])
 
