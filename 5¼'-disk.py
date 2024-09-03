@@ -296,8 +296,12 @@ class Image(SeqWrapper):
             return
         self[self._sect_cursor] = bytes(self.buffer)
 
-    def byte_seek_abs(self, byte_offset: int):
-        assert abs(byte_offset) < Sector_sz
+    def byte_seek_abs(self, byte_offset: int, auto_sect=True):
+        if auto_sect:
+            self._sect_cursor = byte_offset // Sector_sz
+        else:
+            if self._sect_cursor is None:
+                raise Exception("No sector was buffered")
         self._byte_cursor = byte_offset % Sector_sz
 
     def byte_seek_rel(self, byte_offset: int):
