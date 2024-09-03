@@ -298,19 +298,19 @@ class Image(SeqWrapper):
 
     def byte_seek_abs(self, byte_offset: int, auto_sect=True):
         if auto_sect:
-            self._sect_cursor = byte_offset // Sector_sz
-        else:
-            if self._sect_cursor is None:
-                raise Exception("No sector was buffered")
+            designated_sect = byte_offset // Sector_sz
+            if self._sect_cursor != designated_sect:
+                self.sect_buff(designated_sect)
         self._byte_cursor = byte_offset % Sector_sz
 
-    def byte_seek_rel(self, byte_offset: int):
+    def byte_seek_rel(self, byte_offset: int, auto_sect=True):
         assert abs(byte_offset) < Sector_sz
         self._byte_cursor += byte_offset
-        if self._byte_cursor < 0:
-            self.sect_buff(self._sect_cursor - 1)
-        elif self._byte_cursor >= Sector_sz:
-            self.sect_buff(self._sect_cursor + 1)
+        if auto_sect:
+            if self._byte_cursor < 0:
+                self.sect_buff(self._sect_cursor - 1)
+            elif self._byte_cursor >= Sector_sz:
+                self.sect_buff(self._sect_cursor + 1)
         self._byte_cursor %= Sector_sz
 
     def sect_tell(self) -> Optional[int]:
@@ -320,10 +320,14 @@ class Image(SeqWrapper):
         return self._byte_cursor
 
     def read(self, length: int, advance=True) -> bytes:
-        if self._sect_cursor is None:
-            raise Exception("image buffer was not initilized. you need to call sect_buff()")
         end = self._byte_cursor + length
-        back = self.buffer[self._byte_cursor: end]
+        try:
+            back = self.buffer[self._byte_cursor: end]
+        except TypeError as err:
+            if "'NoneType' object is not subscriptable" in err.args:
+                raise Exception("image buffer was not initilized. you need to call sect_buff()")
+            else:
+                raise err
         if advance:
             self._byte_cursor = end
         return bytes(back)
