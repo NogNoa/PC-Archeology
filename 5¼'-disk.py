@@ -128,16 +128,19 @@ class Disk:
             raise Exception("Tried to write a file to disk opened in read-only mode")
         empty = self.fat.fili_locate()[1]
         allocated = []
-        cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
         sectors = file_read(file_nom)
-        for ind, sector in enumerate(sectors):
-            cluster[ind % Sector_sz] = sector
-            if (ind + 1) % Sector_sz == 0:
-                pointer, empty = empty[0], empty[1:]
-                self.fili_img[self.cluster_slice_get(pointer)] = cluster
-                cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
-                allocated.append(pointer)
-
+        loop = True
+        while loop:
+            cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
+            for ind in range(self.struct.cluster_sects):
+                try:
+                    cluster[ind] = next(sectors)
+                except StopIteration:
+                    loop = False
+                    break
+            pointer, empty = empty[0], empty[1:]
+            self.fili_img[self.cluster_slice_get(pointer)] = cluster
+            allocated.append(pointer)
         self.fat.file_add(allocated)
         self.root_dir.file_add(file_nom, allocated[0])
 
