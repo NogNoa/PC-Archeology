@@ -138,7 +138,10 @@ class Disk:
                 except StopIteration:
                     loop = False
                     break
-            pointer, empty = empty[0], empty[1:]
+            try:
+                pointer, empty = empty[0], empty[1:]
+            except IndexError as err:
+                raise Exception("Not enough space for "+file_nom) from err
             self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
@@ -240,6 +243,8 @@ class DiskStruct:
 #         but python is just not like that. The object will have its own local copy of the image.
 
 class SeqWrapper:
+    item_type = any
+
     @abstractmethod
     def __init__(self):
         self._val = []
@@ -250,17 +255,22 @@ class SeqWrapper:
     def __call__(self) -> list:
         return self._val
 
-    def __getitem__(self, index: int) -> any:
+    def __getitem__(self, index: int) -> item_type:
         return self._val[index]
 
-    def __contains__(self, item):
+    def __setitem__(self, index: int, value: item_type):
+        self._val[index] = value
+
+    def __contains__(self, item: item_type):
         return item in self._val
 
-    def index(self, item) -> int:
+    def index(self, item: item_type) -> int:
         return self._val.index(item)
 
 
 class Image(SeqWrapper):
+    item_type = bytes
+
     def __init__(self, scroll_nom: os.PathLike):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
@@ -269,9 +279,6 @@ class Image(SeqWrapper):
         self.max = len(self._val)
         self.buffer = bytearray()
         self.subscribers = []
-
-    def __setitem__(self, sect_index: int, value: bytes):
-        self._val[sect_index] = value
 
     def part_get(self, offset: int, mx: int = None) -> "Imagepart":
         mx = mx if mx is not None else self.max
@@ -394,6 +401,8 @@ class Imagepart(Image):
 
 
 class Fat(SeqWrapper):
+    item_type = int
+
     @abstractmethod
     def __init__(self):
         self._val: fat_t = []
@@ -457,8 +466,11 @@ class Fat12(Fat):
                     raise FatReadError(pointer, file)
         return file
 
-    def file_add(self, alocated: fat_t):
-        pass
+    def file_add(self, allocated: fat_t):
+        for pl, cluster in enumerate(allocated[1:]):
+            # the index pl is off by 1 from the index of cluster
+            self[allocated[pl]] = cluster
+        self[allocated[-1]] = 0xfff
 
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
@@ -476,6 +488,8 @@ class Fat12(Fat):
 
 
 class Directory(SeqWrapper):
+    item_type = int
+
     def __init__(self, img: Imagepart, max_size: int):
         buffer: image_t = img[:]
         self._val = dir_factory(buffer)
