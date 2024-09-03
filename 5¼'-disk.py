@@ -287,6 +287,7 @@ class Image(SeqWrapper):
         return part
 
     def sect_buff(self, sect_index: int = 0):
+        assert sect_index >= 0
         self.sect_flush()
         self._sect_cursor = sect_index
         self.buffer = bytearray(self[sect_index])
@@ -304,14 +305,12 @@ class Image(SeqWrapper):
         self._byte_cursor = byte_offset % Sector_sz
 
     def byte_seek_rel(self, byte_offset: int, auto_sect=True):
-        assert abs(byte_offset) < Sector_sz
         self._byte_cursor += byte_offset
         if auto_sect:
-            if self._byte_cursor < 0:
-                self.sect_buff(self._sect_cursor - 1)
-            elif self._byte_cursor >= Sector_sz:
-                self.sect_buff(self._sect_cursor + 1)
-        self._byte_cursor %= Sector_sz
+            sect_offset = byte_offset // Sector_sz
+            if sect_offset:
+                self.sect_buff(self._sect_cursor + sect_offset)
+        self._byte_cursor = self._byte_cursor + byte_offset % Sector_sz
 
     def sect_tell(self) -> Optional[int]:
         return self._sect_cursor
@@ -320,26 +319,18 @@ class Image(SeqWrapper):
         return self._byte_cursor
 
     def read(self, length: int, advance=True) -> bytes:
-        try:
-            end = self._byte_cursor + length
-        except TypeError as err:
-            if self._byte_cursor is None:
-                raise Exception("image buffer was not initilized. you need to call sect_buff()")
-            else:
-                raise err
+        if self._byte_cursor is None:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
+        end = self._byte_cursor + length
         back = self.buffer[self._byte_cursor: end]
         if advance:
             self._byte_cursor = end
         return bytes(back)
 
     def write(self, value: bytes, advance=True):
-        try:
-            end = self._byte_cursor + len(value)
-        except TypeError as err:
-            if self._byte_cursor is None:
-                raise Exception("image buffer was not initilized. you need to call sect_buff()")
-            else:
-                raise err
+        if self._byte_cursor is None:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
+        end = self._byte_cursor + len(value)
         self.buffer[self._byte_cursor: end] = value
         if advance:
             self._byte_cursor = end
