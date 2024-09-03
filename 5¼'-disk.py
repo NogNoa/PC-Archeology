@@ -315,10 +315,10 @@ class Image(SeqWrapper):
     def byte_tell(self) -> int:
         return self._byte_cursor
 
-    def read(self, byte_offset: int, advance=True) -> bytes:
+    def read(self, length: int, advance=True) -> bytes:
         if self._sect_cursor is None:
             raise Exception("image buffer was not initilized. you need to call sect_buff()")
-        end = self._byte_cursor + byte_offset
+        end = self._byte_cursor + length
         back = self.buffer[self._byte_cursor: end]
         if advance:
             self._byte_cursor = end
@@ -445,7 +445,7 @@ class Fat(SeqWrapper):
 
 
 class Fat12(Fat):
-    def __init__(self, image: Imagepart, fat_sz: int, ):
+    def __init__(self, image: Imagepart, fat_sz: int):
         buffer = image[:]
         buffer = b''.join(buffer)
         self._val = fat12_factory(buffer, fat_sz)
@@ -467,24 +467,30 @@ class Fat12(Fat):
         return file
 
     def file_add(self, allocated: fat_t):
+        self.img.sect_buff(allocated[0] // Sector_sz)
         for pl, cluster in enumerate(allocated[1:]):
             # the index pl is off by 1 from the index of cluster
             self[allocated[pl]] = cluster
+            self.cluster_to_image(allocated[pl], cluster)
         self[allocated[-1]] = 0xfff
+        self.cluster_to_image(allocated[-1], 0xfff)
 
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
         self.img.sect_buff()
         for loc in file:
             self._val[loc] = 0
-            self.img.byte_seek_abs(loc * 3 // 2)
-            b = self.img.read(2, advance=False)
-            if loc % 2:
-                self.img.write((b[0] % 0x10).to_bytes())
-                self.img.write(b'\0')
-            else:
-                self.img.write(b'\0')
-                self.img.write((b[1] >> 4 << 4).to_bytes())
+            self.cluster_to_image(loc, 0)
+
+    def cluster_to_image(self, loc: int, value: int):
+        self.img.byte_seek_abs(loc * 3 // 2)
+        b = self.img.read(2, advance=False)
+        if loc % 2:
+            self.img.write(((b[0] % 0x10) | (value % 0x10 * 0x10)).to_bytes())
+            self.img.write((value // 0x10).to_bytes())
+        else:
+            self.img.write((value % 0x100).to_bytes())
+            self.img.write(((value // 0x100) | (b[1] // 0x10 * 0x10)).to_bytes())
 
 
 class Directory(SeqWrapper):
