@@ -128,23 +128,16 @@ class Disk:
             raise Exception("Tried to write a file to disk opened in read-only mode")
         empty = self.fat.fili_locate()[1]
         allocated = []
-        cluster = []
+        cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
         sectors = file_read(file_nom)
-        loop = True
-        while loop:
-            for ind in range(self.struct.cluster_sects):
-                try:
-                    sector = next(sectors)
-                except StopIteration:
-                    cluster += [b'\0' * Sector_sz] * (self.struct.cluster_sects - len(cluster))
-                    loop = False
-                    break
-                else:
-                    cluster.append(sector)
-            pointer, empty = empty[0], empty[1:]
-            self.fili_img[self.cluster_slice_get(pointer)] = cluster
-            cluster.clear()
-            allocated.append(pointer)
+        for ind, sector in enumerate(sectors):
+            cluster[ind % Sector_sz] = sector
+            if (ind + 1) % Sector_sz == 0:
+                pointer, empty = empty[0], empty[1:]
+                self.fili_img[self.cluster_slice_get(pointer)] = cluster
+                cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
+                allocated.append(pointer)
+
         self.fat.file_add(allocated)
         self.root_dir.file_add(file_nom, allocated[0])
 
@@ -614,7 +607,7 @@ def adress_from_fat_index(pointer: int, struct: DiskStruct) -> int:
     return (pointer - Fat_Offset) * struct.cluster_sects
 
 
-def file_read(file_nom: str) -> Generator[any, bytes, None]:
+def file_read(file_nom: str) -> Generator[bytes, any, None]:
     with open(file_nom, mode="rb") as file:
         while sector := file.read(Sector_sz):
             yield sector
