@@ -473,12 +473,14 @@ class Fat12(Fat):
 
     def file_add(self, allocated: fat_t):
         self.img.sect_buff(allocated[0] // Sector_sz)
-        for pl, cluster in enumerate(allocated[1:]):
+        for alloc_ind, cluster in enumerate(allocated[1:]):
             # the index pl is off by 1 from the index of cluster
-            self[allocated[pl]] = cluster
-            self.cluster_to_image(allocated[pl], cluster)
-        self[allocated[-1]] = 0xfff
-        self.cluster_to_image(allocated[-1], 0xfff)
+            fat_pl = allocated[alloc_ind]
+            self[fat_pl] = cluster
+            self.cluster_to_image(fat_pl, cluster)
+        fat_pl = allocated[-1]
+        self[fat_pl] = 0xfff
+        self.cluster_to_image(fat_pl, 0xfff)
 
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
