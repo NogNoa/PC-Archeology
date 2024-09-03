@@ -319,15 +319,19 @@ class Image(SeqWrapper):
     def byte_tell(self) -> int:
         return self._byte_cursor
 
+    @staticmethod
+    def no_buffer_error_possible(err):
+        if "'NoneType' object is not subscriptable" in err.args:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
+        else:
+            raise err
+
     def read(self, length: int, advance=True) -> bytes:
         end = self._byte_cursor + length
         try:
             back = self.buffer[self._byte_cursor: end]
         except TypeError as err:
-            if "'NoneType' object is not subscriptable" in err.args:
-                raise Exception("image buffer was not initilized. you need to call sect_buff()")
-            else:
-                raise err
+            self.no_buffer_error_possible(err)
         if advance:
             self._byte_cursor = end
         return bytes(back)
@@ -632,6 +636,14 @@ class FatReadError(Exception):
 
 class DirReadError(Exception):
     pass
+
+
+class NoBufferError(Exception):
+    def __init__(self, err: TypeError):
+        if "'NoneType' object is not subscriptable" in err.args:
+            super().__init__("image buffer was not initilized. you need to call sect_buff()")
+        else:
+            TypeError.__init__(*err.args)
 
 
 def adress_from_fat_index(pointer: int, struct: DiskStruct) -> int:
