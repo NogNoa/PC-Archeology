@@ -164,6 +164,7 @@ class Disk:
                 except StopIteration:
                     loop = False
                     break
+            if not loop: break
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
@@ -171,7 +172,8 @@ class Disk:
             self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
-        self.root_dir.file_add(file_nom, allocated[0], len(allocated))
+        self.root_dir.file_add(file_nom, allocated[0], len(allocated) // self.struct.cluster_sects)
+        self.img.flush()
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
@@ -345,7 +347,7 @@ class Image(SeqWrapper):
         return self._byte_cursor
 
     def read(self, length: int, advance=True) -> bytes:
-        if self._byte_cursor is None:
+        if self._sect_cursor is None:
             raise Exception("image buffer was not initilized. you need to call sect_buff()")
         end = self._byte_cursor + length
         back = self.buffer[self._byte_cursor: end]
@@ -354,7 +356,7 @@ class Image(SeqWrapper):
         return bytes(back)
 
     def write(self, value: bytes, advance=True):
-        if self._byte_cursor is None:
+        if self._sect_cursor is None:
             raise Exception("image buffer was not initilized. you need to call sect_buff()")
         end = self._byte_cursor + len(value)
         self.buffer[self._byte_cursor: end] = value
@@ -389,11 +391,20 @@ class Imagepart(Image):
     def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
 
+    def sect_buff(self, sect_index: int):
+        if sect_index is not None:
+            if not 0 <= sect_index < self.__len__():
+                raise IndexError
+        super().sect_buff(sect_index)
+
     def __setitem__(self, sect_index: int | slice, value: bytes | image_t):
         if isinstance(sect_index, int):
+            if not 0 <= sect_index < self.__len__():
+                raise IndexError
             if not isinstance(value, bytes): raise TypeError
             self.mom[self.offset + sect_index] = value
         elif isinstance(sect_index, slice):
+            if any((sect_index.start < 0, self.__len__() <= sect_index.stop)): raise IndexError
             if not isinstance(value, list) and isinstance(value[0], bytes): raise TypeError
             self.mom[self.offset + sect_index.start: self.offset + sect_index.stop] = value
 
@@ -549,20 +560,20 @@ class Directory(SeqWrapper):
             raise DirReadError(err_massage)
         return entry
 
-    def file_add(self, file_nom: str, pointer: int, file_clusti: int = None):
+    def file_add(self, file_nom: str, pointer: int, file_sects: int = None):
         entry = entry_from_file(file_nom)
         entry.first_cluster = pointer
-        if file_clusti:
-            assert entry.size // in {file_clusti, file_clusti}
+        if file_sects:
+            assert (entry.size // Sector_sz) in {file_sects, file_sects - 1}
         self.img.sect_buff()
         φ = 0
         while True:
             b = self.img.read(1, advance=False)
-            if b == 0xe5:
+            if b in {0xe5, 0}:
+                break
+            else:
                 φ += 1
                 self.img.byte_seek_rel(0x20)
-            else:
-                break
         entry.physical_index = φ
         self.img.write(entry.to_image())
         self._val.append(entry)
@@ -694,7 +705,7 @@ def entry_from_file(file_nom: str) -> FileEntry:
     access_date = datetime.date(yeari[1], time_structi[1].tm_mon, time_structi[1].tm_mday)
     write_datetime = datetime.datetime(yeari[2], *write_datetime)
     size = os.path.getsize(file_nom)
-    return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, 0, size)
+    return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
 
 """
@@ -713,7 +724,7 @@ def main():
     disk.loci_print(fili)
     print(f"empty {emp}")
     disk.fili_extract()
-    disk.file_del("donkey.bas")
+    disk.file_add(sys.argv[2])
 
 
 main()
