@@ -28,22 +28,29 @@ Dir_Entry_sz = 0x20
 class FileEntry:
     name: str  # 8
     ext: str  # 3
-    # 3
-    create_datetime: datetime.datetime  # 4
-    access_date: datetime.date  # 2
+    hidden: bool       #
+    system_file: bool  # 1
+    # 2
+    create_datetime: datetime.datetime  # 4  # not in 1.0
+    access_date: datetime.date  # 2  # not in 1.0
     # 2
     write_datetime: datetime.datetime  # 4
     first_cluster: int  # 2
     size: int  # 4
 
-    def __init__(self, file: bytes):
+    physical_index: int
+
+    def __init__(self, file: bytes, physical_index: int):
         self.name = str(file[:8], encoding="ansi").upper().strip()
         self.ext = str(file[8:0xB], encoding="ansi").upper().strip()
+        self.hidden = bool(file[0xB] | 2)
+        self.system_file = bool(file[0xB] | 4)
         self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
         self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
         self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
         self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
         self.size = int.from_bytes(file[0x1C:], byteorder='little')
+        self.physical_index = physical_index
 
     @property
     def full_name(self) -> str:
@@ -473,14 +480,12 @@ class Fat12(Fat):
 
     def file_add(self, allocated: fat_t):
         self.img.sect_buff(allocated[0] // Sector_sz)
-        for alloc_ind, cluster in enumerate(allocated[1:]):
+        for pl, cluster in enumerate(allocated[1:]):
             # the index pl is off by 1 from the index of cluster
-            fat_pl = allocated[alloc_ind]
-            self[fat_pl] = cluster
-            self.cluster_to_image(fat_pl, cluster)
-        fat_pl = allocated[-1]
-        self[fat_pl] = 0xfff
-        self.cluster_to_image(fat_pl, 0xfff)
+            self[allocated[pl]] = cluster
+            self.cluster_to_image(allocated[pl], cluster)
+        self[allocated[-1]] = 0xfff
+        self.cluster_to_image(allocated[-1], 0xfff)
 
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
@@ -493,11 +498,11 @@ class Fat12(Fat):
         self.img.byte_seek_abs(loc * 3 // 2)
         b = self.img.read(2, advance=False)
         if loc % 2:
-            self.img.write(((b[0] % 0x10) | (value % 0x10 * 0x10)).to_bytes())
+            self.img.write(((b[0] % 0x10) +  0x10 * (value % 0x10)).to_bytes())
             self.img.write((value // 0x10).to_bytes())
         else:
             self.img.write((value % 0x100).to_bytes())
-            self.img.write(((value // 0x100) | (b[1] // 0x10 * 0x10)).to_bytes())
+            self.img.write(((value // 0x100) + 0x10 * (b[1] // 0x10)).to_bytes())
 
 
 class Directory(SeqWrapper):
@@ -526,7 +531,7 @@ class Directory(SeqWrapper):
         return entry
 
     def file_add(self, file_nom: str, pointer: int):
-        pass
+        entry = FileEntry()
 
     def file_del(self, entry: FileEntry):
         index = self._val.index(entry)
@@ -547,9 +552,10 @@ class Directory(SeqWrapper):
             raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
-            assert entry == FileEntry(candidate)
+            candidate = FileEntry(candidate)
+            assert entry == candidate
         except AssertionError:
-            raise DirReadError(f"{entry} \ndiffer from \n{FileEntry(candidate)}")
+            raise DirReadError(f"{entry} \ndiffer from \n{candidate}")
         if index == len(self._val) - 1:
             self.img.write(b"\0")
         else:
@@ -580,10 +586,10 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
     while buffer:
         entrii, buffer = buffer[:3], buffer[3:]
         # elements of bytes object are ints
-        table.append(entrii[0] + 0x100 * (entrii[1] % 0x10))
+        table.append(entrii[0] + 0x100 * (entrii[1] & 0xF))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
     if end == 2:
-        table.append(last[0] + 0x100 * (last[1] % 0x10))
+        table.append(last[0] + 0x100 * (last[1] & 0xF))
     elif end == 1:
         table.append(last[0])
     return table
@@ -605,18 +611,17 @@ def ms_date(call: bytes) -> dict[str, int]:
 
 def dir_factory(dir_img: image_t) -> dir_t:
     folder = []
-    for sector in dir_img:
+    for pl, sector in enumerate(dir_img):
         while sector:
             entry, sector = sector[:Dir_Entry_sz], sector[Dir_Entry_sz:]
             if entry[0] == 0xe5:
                 continue
             elif entry[0] == 0:
                 break
-            folder.append(entry)
+            folder.append(FileEntry(entry, pl))
         else:
             continue
         break
-    folder = [FileEntry(entry) for entry in folder]
     return folder
 
 
