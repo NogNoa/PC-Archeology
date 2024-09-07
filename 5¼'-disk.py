@@ -29,8 +29,7 @@ Dir_Entry_sz = 0x20
 class FileEntry:
     name: str  # 8
     ext: str  # 3
-    hidden: bool       #
-    system_file: bool  # 1
+    # flags  # 1
     # 2
     create_datetime: datetime.datetime  # 4  # not in 1.0
     access_date: datetime.date  # 2  # not in 1.0
@@ -41,17 +40,23 @@ class FileEntry:
 
     physical_index: int
 
-    def __init__(self, file: bytes, physical_index: int):
-        self.name = str(file[:8], encoding="ansi").upper().strip()
-        self.ext = str(file[8:0xB], encoding="ansi").upper().strip()
-        self.hidden = bool(file[0xB] | 2)
-        self.system_file = bool(file[0xB] | 4)
-        self.create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
-        self.access_date = datetime.date(**ms_date(file[0x12:0x14]))
-        self.write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
-        self.first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
-        self.size = int.from_bytes(file[0x1C:], byteorder='little')
-        self.physical_index = physical_index
+    # flags:
+    hidden: bool = False
+    system_file: bool = False
+
+    @staticmethod
+    def from_image(file: bytes, physical_index: int):
+        name = str(file[:8], encoding="ansi").upper().strip()
+        ext = str(file[8:0xB], encoding="ansi").upper().strip()
+        hidden = bool(file[0xB] | 2)
+        system_file = bool(file[0xB] | 4)
+        create_datetime = datetime.datetime(**ms_time(file[0xE:0x10]), **ms_date(file[0x10:0x12]))
+        access_date = datetime.date(**ms_date(file[0x12:0x14]))
+        write_datetime = datetime.datetime(**ms_time(file[0x16:0x18]), **ms_date(file[0x18:0x1A]))
+        first_cluster = int.from_bytes(file[0x1A:0x1C], byteorder='little')
+        size = int.from_bytes(file[0x1C:], byteorder='little')
+        return FileEntry(name, ext, create_datetime, access_date, write_datetime,
+                         first_cluster, size, physical_index, hidden, system_file)
 
     @property
     def full_name(self) -> str:
@@ -532,23 +537,20 @@ class Directory(SeqWrapper):
         return entry
 
     def file_add(self, file_nom: str, pointer: int):
-        basename = os.path.basename(file_nom)
-        basename, _, ext = basename.partition(".")
-        create_second = os.path.getctime(file_nom)
-        access_second = os.path.getatime(file_nom)
-        write_second = os.path.getmtime(file_nom)
-        time_structi = tuple(time.localtime(second) for second in (create_second, access_second, write_second))
-        yeari = tuple((1980 +  (s.tm_year + 4) % 16) for s in time_structi)
-        # the modal 16 year since 1980. 1980 is 12 in mode 16, so we need to add 4,
-        # to put the year on the right place in the cycle.
-        create_datetime, write_datetime  = ((strct.tm_mon, strct.tm_mday,
-                                             strct.tm_hour, strct.tm_min, strct.tm_sec)
-                                            for strct in (time_structi[0], time_structi[2]))
-        create_datetime = datetime.datetime(yeari[0], *create_datetime)
-        access_date = datetime.date(yeari[1], time_structi[1].tm_mon, time_structi[1].tm_mday)
-        write_datetime = datetime.datetime(yeari[2], *write_datetime)
-        entry = FileEntry()
-
+        entry = entry_from_file(file_nom)
+        entry.first_cluster = pointer
+        self.img.sect_buff()
+        φ = 0
+        while True:
+            b = self.img.read(1, advance=False)
+            if b == 0xe5:
+                φ += 1
+                self.img.byte_seek_rel(0x20)
+            else:
+                break
+        entry.physical_index = φ
+        self.img.write(entry.to_image())
+        self._val.append(entry)
 
     def file_del(self, entry: FileEntry):
         virtual_index = self._val.index(entry)
@@ -556,7 +558,7 @@ class Directory(SeqWrapper):
         self.img.byte_seek_abs(entry.physical_index * Dir_Entry_sz)
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
-            candidate = FileEntry(candidate, entry.physical_index)
+            candidate = FileEntry.from_image(candidate, entry.physical_index)
             assert entry == candidate
         except AssertionError:
             raise DirReadError(f"{entry} \ndiffer from \n{candidate}")
@@ -622,7 +624,7 @@ def dir_factory(dir_img: image_t) -> dir_t:
                 continue
             elif entry[0] == 0:
                 break
-            folder.append(FileEntry(entry, pl))
+            folder.append(FileEntry.from_image(entry, pl))
         else:
             continue
         break
@@ -650,6 +652,26 @@ def file_read(file_nom: str) -> Generator[bytes, any, None]:
     with open(file_nom, mode="rb") as file:
         while sector := file.read(Sector_sz):
             yield sector
+
+
+def entry_from_file(file_nom):
+    basename = os.path.basename(file_nom)
+    basename, _, ext = basename.partition(".")
+    create_second = os.path.getctime(file_nom)
+    access_second = os.path.getatime(file_nom)
+    write_second = os.path.getmtime(file_nom)
+    time_structi = tuple(time.localtime(second) for second in (create_second, access_second, write_second))
+    yeari = tuple((1980 +  (s.tm_year + 4) % 16) for s in time_structi)
+    # the modal 16 year since 1980. 1980 is 12 in mode 16, so we need to add 4,
+    # to put the year on the right place in the cycle.
+    create_datetime, write_datetime  = ((strct.tm_mon, strct.tm_mday,
+                                         strct.tm_hour, strct.tm_min, strct.tm_sec)
+                                        for strct in (time_structi[0], time_structi[2]))
+    create_datetime = datetime.datetime(yeari[0], *create_datetime)
+    access_date = datetime.date(yeari[1], time_structi[1].tm_mon, time_structi[1].tm_mday)
+    write_datetime = datetime.datetime(yeari[2], *write_datetime)
+    size = os.path.getsize(file_nom)
+    return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, 0, size)
 
 
 """
