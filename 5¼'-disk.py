@@ -62,6 +62,19 @@ class FileEntry:
     def full_name(self) -> str:
         return f"{self.name}.{self.ext}"
 
+    def to_image(self) -> bytes:
+        back = self.name[:8].encode("ansi")
+        back += self.ext[:3].encode("ansi")
+        back += (2*self.hidden + 4*self.system_file).to_bytes()
+        back += '\0'*2
+        back += to_ms_time(self.create_datetime)
+        back += to_ms_time(self.access_date)[2:]
+        back += '\0' * 2
+        back += to_ms_time(self.write_datetime)
+        back += self.first_cluster.to_bytes()
+        back += self.size.to_bytes()
+        return back
+
 
 image_t : TypeAlias = list[bytes]
 fat_t : TypeAlias = list[int]
@@ -614,6 +627,8 @@ def ms_date(call: bytes) -> dict[str, int]:
             'month': call[0] // 0x20 + 0x20 * call[1] % 2 or 1,  # 5..9
             'year' : 1980 + call[1] // 2}  # 9..16
 
+def to_ms_time(datetime: datetime):
+    pass
 
 def dir_factory(dir_img: image_t) -> dir_t:
     folder = []
@@ -654,7 +669,7 @@ def file_read(file_nom: str) -> Generator[bytes, any, None]:
             yield sector
 
 
-def entry_from_file(file_nom):
+def entry_from_file(file_nom: str) -> FileEntry:
     basename = os.path.basename(file_nom)
     basename, _, ext = basename.partition(".")
     create_second = os.path.getctime(file_nom)
