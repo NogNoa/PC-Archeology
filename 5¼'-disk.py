@@ -63,16 +63,16 @@ class FileEntry:
         return f"{self.name}.{self.ext}"
 
     def to_image(self) -> bytes:
-        back = self.name[:8].encode("ansi")
-        back += self.ext[:3].encode("ansi")
-        back += (2*self.hidden + 4*self.system_file).to_bytes()
-        back += '\0'*2
+        back = "{:<8}".format(self.name[:8]).encode("ansi")
+        back += "{:<3}".format(self.ext[:3]).encode("ansi")
+        back += (2*self.hidden + 4*self.system_file).to_bytes(1)
+        back += b'\0'*2
         back += to_ms_time(self.create_datetime)
         back += to_ms_time(self.access_date)
-        back += '\0' * 2
+        back += b'\0' * 2
         back += to_ms_time(self.write_datetime)
-        back += self.first_cluster.to_bytes()
-        back += self.size.to_bytes()
+        back += self.first_cluster.to_bytes(2, "little")
+        back += self.size.to_bytes(4, "little")
         return back
 
 
@@ -172,6 +172,7 @@ class Disk:
             self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
+        self.sync_other_fats()
         self.root_dir.file_add(file_nom, allocated[0], len(allocated) // self.struct.cluster_sects)
         self.img.flush()
 
@@ -397,7 +398,6 @@ class Imagepart(Image):
             raise IndexError
         super().sect_buff(sect_index)
 
-        # due to inheritence there is no bound safety actually.
 
     def byte_seek_abs(self, byte_offset: int, auto_sect=True):
         if auto_sect:
@@ -409,10 +409,10 @@ class Imagepart(Image):
     def byte_seek_rel(self, byte_offset: int, auto_sect=True):
         self._byte_cursor += byte_offset
         if auto_sect:
-            sect_offset = byte_offset // Sector_sz
+            sect_offset = self._byte_cursor // Sector_sz
             if sect_offset:
                 self.sect_buff(self._sect_cursor + sect_offset)
-        self._byte_cursor = self._byte_cursor + byte_offset % Sector_sz
+        self._byte_cursor %= Sector_sz
 
     def byte_tell(self) -> int:
         return self._byte_cursor
@@ -565,7 +565,7 @@ class Directory(SeqWrapper):
         φ = 0
         while True:
             b = self.img.read(1, advance=False)
-            if b in {0xe5, 0}:
+            if b in {b'\xe5', b'\0'}:
                 break
             else:
                 φ += 1
@@ -638,10 +638,10 @@ def ms_date(call: bytes) -> dict[str, int]:
 
 
 def to_ms_time(call: datetime.datetime | datetime.date):
-    back = 'b'
+    back = b''
     if isinstance(call, datetime.datetime):
-        back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes()
-    back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes()
+        back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
+    back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes(2, 'little')
     return back
 
 
@@ -705,9 +705,9 @@ def entry_from_file(file_nom: str) -> FileEntry:
 
 
 """
-empty space locate
-file_add
-format
+todo:image_part bound chaecking
+     format
+     richer file map printing
 """
 
 
