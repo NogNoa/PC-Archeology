@@ -68,7 +68,7 @@ class FileEntry:
         back += (2*self.hidden + 4*self.system_file).to_bytes()
         back += '\0'*2
         back += to_ms_time(self.create_datetime)
-        back += to_ms_time(self.access_date)[2:]
+        back += to_ms_time(self.access_date)
         back += '\0' * 2
         back += to_ms_time(self.write_datetime)
         back += self.first_cluster.to_bytes()
@@ -171,7 +171,7 @@ class Disk:
             self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
-        self.root_dir.file_add(file_nom, allocated[0])
+        self.root_dir.file_add(file_nom, allocated[0], len(allocated))
 
     def file_del(self, nom: str):
         entry = self.root_dir[nom]
@@ -549,9 +549,11 @@ class Directory(SeqWrapper):
             raise DirReadError(err_massage)
         return entry
 
-    def file_add(self, file_nom: str, pointer: int):
+    def file_add(self, file_nom: str, pointer: int, file_clusti: int = None):
         entry = entry_from_file(file_nom)
         entry.first_cluster = pointer
+        if file_clusti:
+            assert entry.size // in {file_clusti, file_clusti}
         self.img.sect_buff()
         φ = 0
         while True:
@@ -617,18 +619,24 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
 def ms_time(call: bytes) -> dict[str, int]:
     hour = call[1] // 8  # 11..16
     return {'second': 2 * call[0] % 0x20,  # 0..5
-            'minute': call[0] // 0x20 + 0x20 * call[1] % 8,  # 5..11
+            'minute': call[0] // 0x20 + 0x20 * (call[1] % 8),  # 5..11
             'hour'  : hour - 1 if hour else hour}
     # hour need to be converted from 0..25 (0 being dummy) on fat to 0..24 on python
 
 
 def ms_date(call: bytes) -> dict[str, int]:
-    return {'day'  : call[0] % 0x20 or 1,  # 0..5
-            'month': call[0] // 0x20 + 0x20 * call[1] % 2 or 1,  # 5..9
+    return {'day'  : (call[0] % 0x20) or 1,  # 0..5
+            'month': (call[0] // 0x20 + 0x20 * call[1] % 2) or 1,  # 5..9
             'year' : 1980 + call[1] // 2}  # 9..16
 
-def to_ms_time(datetime: datetime):
-    pass
+
+def to_ms_time(call: datetime.datetime | datetime.date):
+    back = 'b'
+    if isinstance(call, datetime.datetime):
+        back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes()
+    back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes()
+    return back
+
 
 def dir_factory(dir_img: image_t) -> dir_t:
     folder = []
