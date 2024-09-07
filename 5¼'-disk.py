@@ -3,6 +3,7 @@ import datetime
 import os
 import pathlib
 import sys
+import time
 from abc import abstractmethod
 from typing import Optional, Generator, TypeAlias
 from collections.abc import Iterator
@@ -531,36 +532,39 @@ class Directory(SeqWrapper):
         return entry
 
     def file_add(self, file_nom: str, pointer: int):
+        basename = os.path.basename(file_nom)
+        basename, _, ext = basename.partition(".")
+        create_second = os.path.getctime(file_nom)
+        access_second = os.path.getatime(file_nom)
+        write_second = os.path.getmtime(file_nom)
+        time_structi = tuple(time.localtime(second) for second in (create_second, access_second, write_second))
+        yeari = tuple((1980 +  (s.tm_year + 4) % 16) for s in time_structi)
+        # the modal 16 year since 1980. 1980 is 12 in mode 16, so we need to add 4,
+        # to put the year on the right place in the cycle.
+        create_datetime, write_datetime  = ((strct.tm_mon, strct.tm_mday,
+                                             strct.tm_hour, strct.tm_min, strct.tm_sec)
+                                            for strct in (time_structi[0], time_structi[2]))
+        create_datetime = datetime.datetime(yeari[0], *create_datetime)
+        access_date = datetime.date(yeari[1], time_structi[1].tm_mon, time_structi[1].tm_mday)
+        write_datetime = datetime.datetime(yeari[2], *write_datetime)
         entry = FileEntry()
 
+
     def file_del(self, entry: FileEntry):
-        index = self._val.index(entry)
-        j = index
+        virtual_index = self._val.index(entry)
         self.img.sect_buff()
-        for _ in range(self.max_size):
-            if not j:
-                break
-            # j has to be finite positive smaller then len(self._val)
-            b = self.img.read(1, False)
-            if b in {b'', b'\0'}:
-                raise DirReadError(f"{entry.name}; read {b} at entry {index - j} "
-                                   f"address directory:{self.img.byte_tell(): x}")
-            elif b[0] != 0xE5:
-                j -= 1
-            self.img.byte_seek_rel(Dir_Entry_sz)
-        else:
-            raise DirReadError(f"got to the absolute end of the directory and haven't found {entry.name}")
+        self.img.byte_seek_abs(entry.physical_index * Dir_Entry_sz)
         candidate = self.img.read(Dir_Entry_sz, False)
         try:
-            candidate = FileEntry(candidate)
+            candidate = FileEntry(candidate, entry.physical_index)
             assert entry == candidate
         except AssertionError:
             raise DirReadError(f"{entry} \ndiffer from \n{candidate}")
-        if index == len(self._val) - 1:
+        if virtual_index == len(self._val) - 1:
             self.img.write(b"\0")
         else:
             self.img.write(b'\xE5')
-        del self._val[index]
+        del self._val[virtual_index]
 
 
 class FatIDError(Exception):
