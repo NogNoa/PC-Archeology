@@ -303,7 +303,6 @@ class Image(SeqWrapper):
         self._val = disk_factory(scroll_nom)
         self.file = scroll_nom
         self._sect_cursor: Optional[int] = None
-        self._byte_cursor = 0
         self.max = len(self._val)
         self.buffer = bytearray()
         self.subscribers = []
@@ -325,43 +324,8 @@ class Image(SeqWrapper):
             return
         self[self._sect_cursor] = bytes(self.buffer)
 
-    def byte_seek_abs(self, byte_offset: int, auto_sect=True):
-        if auto_sect:
-            designated_sect = byte_offset // Sector_sz
-            if self._sect_cursor != designated_sect:
-                self.sect_buff(designated_sect)
-        self._byte_cursor = byte_offset % Sector_sz
-
-    def byte_seek_rel(self, byte_offset: int, auto_sect=True):
-        self._byte_cursor += byte_offset
-        if auto_sect:
-            sect_offset = byte_offset // Sector_sz
-            if sect_offset:
-                self.sect_buff(self._sect_cursor + sect_offset)
-        self._byte_cursor = self._byte_cursor + byte_offset % Sector_sz
-
     def sect_tell(self) -> Optional[int]:
         return self._sect_cursor
-
-    def byte_tell(self) -> int:
-        return self._byte_cursor
-
-    def read(self, length: int, advance=True) -> bytes:
-        if self._sect_cursor is None:
-            raise Exception("image buffer was not initilized. you need to call sect_buff()")
-        end = self._byte_cursor + length
-        back = self.buffer[self._byte_cursor: end]
-        if advance:
-            self._byte_cursor = end
-        return bytes(back)
-
-    def write(self, value: bytes, advance=True):
-        if self._sect_cursor is None:
-            raise Exception("image buffer was not initilized. you need to call sect_buff()")
-        end = self._byte_cursor + len(value)
-        self.buffer[self._byte_cursor: end] = value
-        if advance:
-            self._byte_cursor = end
 
     def iner_flush(self):
         self.sect_flush()
@@ -384,18 +348,13 @@ class Imagepart(Image):
         self.mom = img
         self.offset = offset
         self.max = mx
+        self._byte_cursor = 0
 
     def __len__(self) -> int:
         return self.max - self.offset
 
     def __call__(self) -> image_t:
         return self.mom[self.offset: self.max]
-
-    def sect_buff(self, sect_index: int):
-        if sect_index is not None:
-            if not 0 <= sect_index < self.__len__():
-                raise IndexError
-        super().sect_buff(sect_index)
 
     def __setitem__(self, sect_index: int | slice, value: bytes | image_t):
         if isinstance(sect_index, int):
@@ -437,6 +396,43 @@ class Imagepart(Image):
         if not 0 <= sect_index < self.__len__():
             raise IndexError
         super().sect_buff(sect_index)
+
+        # due to inheritence there is no bound safety actually.
+
+    def byte_seek_abs(self, byte_offset: int, auto_sect=True):
+        if auto_sect:
+            designated_sect = byte_offset // Sector_sz
+            if self._sect_cursor != designated_sect:
+                self.sect_buff(designated_sect)
+        self._byte_cursor = byte_offset % Sector_sz
+
+    def byte_seek_rel(self, byte_offset: int, auto_sect=True):
+        self._byte_cursor += byte_offset
+        if auto_sect:
+            sect_offset = byte_offset // Sector_sz
+            if sect_offset:
+                self.sect_buff(self._sect_cursor + sect_offset)
+        self._byte_cursor = self._byte_cursor + byte_offset % Sector_sz
+
+    def byte_tell(self) -> int:
+        return self._byte_cursor
+
+    def read(self, length: int, advance=True) -> bytes:
+        if self._sect_cursor is None:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
+        end = self._byte_cursor + length
+        back = self.buffer[self._byte_cursor: end]
+        if advance:
+            self._byte_cursor = end
+        return bytes(back)
+
+    def write(self, value: bytes, advance=True):
+        if self._sect_cursor is None:
+            raise Exception("image buffer was not initilized. you need to call sect_buff()")
+        end = self._byte_cursor + len(value)
+        self.buffer[self._byte_cursor: end] = value
+        if advance:
+            self._byte_cursor = end
 
     def flush(self):
         self.iner_flush()
