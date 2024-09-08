@@ -565,7 +565,7 @@ class Directory(SeqWrapper):
         φ = 0
         while True:
             b = self.img.read(1, advance=False)
-            if b in {b'\xe5', b'\0'}:
+            if b in {0xe5, 0}:  # {b'\xe5', b'\0'}: testing
                 break
             else:
                 φ += 1
@@ -639,9 +639,16 @@ def ms_date(call: bytes) -> dict[str, int]:
 
 def to_ms_time(call: datetime.datetime | datetime.date) -> bytes:
     back = b''
+    # in case of doubt, preserve 0 input (only forces hour, day and month to 0 instead of 1)
     if isinstance(call, datetime.datetime):
-        back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
-    back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes(2, 'little')
+        if not any((call.second, call.minute, call.hour)):
+            back += b'0' * 2
+        else:
+            back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
+    if call.day == call.month == 1 and call.year == 1980:
+        back += b'0' * 2
+    else:
+        back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes(2, 'little')
     return back
 
 
