@@ -398,7 +398,6 @@ class Imagepart(Image):
             raise IndexError
         super().sect_buff(sect_index)
 
-
     def byte_seek_abs(self, byte_offset: int, auto_sect=True):
         if auto_sect:
             designated_sect = byte_offset // Sector_sz
@@ -565,7 +564,7 @@ class Directory(SeqWrapper):
         φ = 0
         while True:
             b = self.img.read(1, advance=False)
-            if b in {0xe5, 0}:  # {b'\xe5', b'\0'}: testing
+            if b in {b'\xe5', b'\0'}:
                 break
             else:
                 φ += 1
@@ -641,14 +640,14 @@ def to_ms_time(call: datetime.datetime | datetime.date) -> bytes:
     back = b''
     # in case of doubt, preserve 0 input (only forces hour, day and month to 0 instead of 1)
     if isinstance(call, datetime.datetime):
-        if not any((call.second, call.minute, call.hour)):
-            back += b'0' * 2
-        else:
-            back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
-    if call.day == call.month == 1 and call.year == 1980:
-        back += b'0' * 2
-    else:
-        back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes(2, 'little')
+        back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
+        # if not any((call.second, call.minute, call.hour)):
+        if back == b'\x08\0':
+            back = b'\0' * 2
+    back += (call.day + 0x20 * call.month + 0x200 * (call.year - 1980)).to_bytes(2, 'little')
+    # if call.day == call.month == 1 and call.year == 1980:
+    if back[-2:] == b'\x21\0':
+        back = back[:-2] + b'\0' * 2
     return back
 
 
