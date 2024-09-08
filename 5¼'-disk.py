@@ -626,18 +626,18 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
 def ms_time(call: bytes) -> dict[str, int]:
     hour = call[1] // 8  # 11..16
     return {'second': 2 * call[0] % 0x20,  # 0..5
-            'minute': call[0] // 0x20 + 0x20 * (call[1] % 8),  # 5..11
+            'minute': call[0] // 0x20 + 8 * (call[1] % 8),  # 5..11
             'hour'  : hour - 1 if hour else hour}
-    # hour need to be converted from 0..25 (0 being dummy) on fat to 0..24 on python
+    # hour need to be converted from 0..24 (0 being dummy) on fat to 0..23 on python
 
 
 def ms_date(call: bytes) -> dict[str, int]:
     return {'day'  : (call[0] % 0x20) or 1,  # 0..5
-            'month': (call[0] // 0x20 + 0x20 * call[1] % 2) or 1,  # 5..9
+            'month': (call[0] // 0x20 + 8 * call[1] % 2) or 1,  # 5..9
             'year' : 1980 + call[1] // 2}  # 9..16
 
 
-def to_ms_time(call: datetime.datetime | datetime.date):
+def to_ms_time(call: datetime.datetime | datetime.date) -> bytes:
     back = b''
     if isinstance(call, datetime.datetime):
         back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
