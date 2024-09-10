@@ -144,7 +144,26 @@ class Disk:
         fili = self.fili_describe(loci)
         for entry, loc in fili:
             loc = loc_list_to_ranges(loc)
-            loc = ["{}..{}".format(*p) for p in loc]
+            loc = ["{:X}..{:X}".format(*p) for p in loc]
+            loc = ", ".join(loc)
+            print(entry.full_name, loc)
+
+    def secti_print(self, loci: Optional[list[loc_t]] = None):
+        fili = self.fili_describe(loci)
+        for entry, loc in fili:
+            loc = loc_list_to_ranges(loc)
+            loc = ((sector_from_fat_loc(p, self.struct) + self.struct.files_floor for p in pl) for pl in loc)
+            loc = ["{:X}..{:X}".format(*p) for p in loc]
+            loc = ", ".join(loc)
+            print(entry.full_name, loc)
+
+    def disk_offset_print(self, loci: Optional[list[loc_t]] = None):
+        fili = self.fili_describe(loci)
+        for entry, loc in fili:
+            loc = loc_list_to_ranges(loc)
+            loc = (((sector_from_fat_loc(p, self.struct) + self.struct.files_floor)
+                    * Sector_sz for p in pl) for pl in loc)
+            loc = ["{:X}..{:X}".format(*p) for p in loc]
             loc = ", ".join(loc)
             print(entry.full_name, loc)
 
@@ -729,7 +748,6 @@ def entry_from_file(file_nom: str) -> FileEntry:
 todo:
     format
     create disk from folder
-    richer file map printing
 """
 
 
@@ -739,7 +757,7 @@ def main():
 
     disk = Disk(scroll, read_only=False)
     fili, emp = disk.fat.fili_locate()
-    disk.loci_print(fili)
+    disk.disk_offset_print(fili)
     print(f"empty {emp}")
     # disk.file_add(sys.argv[2])
 
