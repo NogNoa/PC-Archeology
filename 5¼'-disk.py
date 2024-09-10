@@ -82,10 +82,6 @@ loc_t : TypeAlias = list[int]
 dir_t : TypeAlias = list[FileEntry]
 file_desc_t : TypeAlias = tuple[FileEntry, loc_t]
 
-Whence_Start = 0
-Whence_Cursor = 1
-Whence_End = 2
-
 
 class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool = True):
@@ -140,7 +136,7 @@ class Disk:
         return byti
 
     def cluster_slice_get(self, sect_ind: int) -> slice:
-        this_cluster = (sect_ind - Fat_Offset) * self.struct.cluster_sects
+        this_cluster = sector_from_fat_loc(sect_ind, self.struct)
         next_cluster = this_cluster + self.struct.cluster_sects
         return slice(this_cluster, next_cluster)
 
@@ -680,8 +676,23 @@ class DirReadError(Exception):
     pass
 
 
-def adress_from_fat_index(pointer: int, struct: DiskStruct) -> int:
+def sector_from_fat_loc(pointer: int, struct: DiskStruct) -> int:
     return (pointer - Fat_Offset) * struct.cluster_sects
+
+
+def fat_loc_from_sector(sect: int, struct: DiskStruct) -> int:
+    return sect // struct.cluster_sects + Fat_Offset
+
+def loc_list_to_ranges(loci: loc_t) -> list[tuple[int,int]]:
+    back = []
+    pl=1
+    start = loci[0]
+    for pl in range(1, len(loci)):
+        if loci[pl+1] == loci[pl] + 1:
+            continue
+        else:
+            end = loci[pl] + 1
+            back.append((start,end))
 
 
 def file_read(file_nom: str) -> Generator[bytes, any, None]:
@@ -711,9 +722,10 @@ def entry_from_file(file_nom: str) -> FileEntry:
 
 
 """
-todo:image_part bound chaecking
-     format
-     richer file map printing
+todo:
+    format
+    create disk from folder
+    richer file map printing
 """
 
 
@@ -725,7 +737,6 @@ def main():
     fili, emp = disk.fat.fili_locate()
     disk.loci_print(fili)
     print(f"empty {emp}")
-    disk.fili_extract()
     disk.file_add(sys.argv[2])
 
 
