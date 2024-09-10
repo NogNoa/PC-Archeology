@@ -144,7 +144,8 @@ class Disk:
         fili = self.fili_describe(loci)
         for entry, loc in fili:
             loc = loc_list_to_ranges(loc)
-            loc = loc[0] if len(loc) == 1 else loc
+            loc = ["{}..{}".format(*p) for p in loc]
+            loc = ", ".join(loc)
             print(entry.full_name, loc)
 
     def file_add(self, file_nom: str):
