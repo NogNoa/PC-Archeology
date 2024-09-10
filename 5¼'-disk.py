@@ -143,6 +143,8 @@ class Disk:
     def loci_print(self, loci: Optional[list[loc_t]] = None):
         fili = self.fili_describe(loci)
         for entry, loc in fili:
+            loc = loc_list_to_ranges(loc)
+            loc = loc[0] if len(loc) == 1 else loc
             print(entry.full_name, loc)
 
     def file_add(self, file_nom: str):
@@ -683,16 +685,17 @@ def sector_from_fat_loc(pointer: int, struct: DiskStruct) -> int:
 def fat_loc_from_sector(sect: int, struct: DiskStruct) -> int:
     return sect // struct.cluster_sects + Fat_Offset
 
-def loc_list_to_ranges(loci: loc_t) -> list[tuple[int,int]]:
+
+def loc_list_to_ranges(loci: loc_t) -> list[tuple[int, int]]:
     back = []
-    pl=1
     start = loci[0]
-    for pl in range(1, len(loci)):
-        if loci[pl+1] == loci[pl] + 1:
-            continue
-        else:
-            end = loci[pl] + 1
-            back.append((start,end))
+    for pl in range(0, len(loci) - 1):
+        end = loci[pl] + 1
+        if loci[pl+1] != end:
+            back.append((start, end))
+            start = loci[pl+1]
+    back.append((start, loci[-1] + 1))
+    return back
 
 
 def file_read(file_nom: str) -> Generator[bytes, any, None]:
@@ -737,7 +740,7 @@ def main():
     fili, emp = disk.fat.fili_locate()
     disk.loci_print(fili)
     print(f"empty {emp}")
-    disk.file_add(sys.argv[2])
+    # disk.file_add(sys.argv[2])
 
 
 main()
