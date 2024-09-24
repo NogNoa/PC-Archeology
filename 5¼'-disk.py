@@ -658,13 +658,12 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
 
 
 def fat12_to_buffer(call: fat_t) -> image_t:
-    buffer: list[int] = []
+    buffer: bytes = b''
     while call:
         even, odd, call = call[0], call[1], call[2:]
-        buffer.append(even % 0x100)
-        buffer.append((even // 0x100) + 0x100 * (odd % 0x10))
-        buffer.append(odd // 0x10)
-    return [b.to_bytes() for b in buffer]
+        buffer += (even + 0x1000 * odd).to_bytes(byteorder="little")
+    buffer += b'\xF6' * (Sector_sz-len(buffer))
+    return [buffer]
 
 
 def ms_time(call: bytes) -> dict[str, int]:
