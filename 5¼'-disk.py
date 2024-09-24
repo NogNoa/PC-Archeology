@@ -6,7 +6,7 @@ import pathlib
 import sys
 import time
 from abc import abstractmethod
-from typing import Optional, Generator, TypeAlias
+from typing import Optional, Generator, TypeAlias, Self
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -88,7 +88,7 @@ class Disk:
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool = True):
         self.read_only = read_only
         self.path = pathlib.Path(scroll_nom)
-        self.img = img = Image(self.path)
+        self.img = img = Image.from_file(self.path)
         self.struct = struct = DiskStruct(img[1][0])
         fat = img.part_get(Reserved_Sectors, struct.second_fat_floor)
         assert fat() == img[struct.second_fat_floor: struct.root_dir_floor]
@@ -322,17 +322,23 @@ class SeqWrapper:
 class Image(SeqWrapper):
     item_type = bytes
 
-    def __init__(self, scroll_nom: os.PathLike):
-        self._val = disk_factory(scroll_nom)
-        self.file = scroll_nom
+    def __init__(self, val: image_t):
+        self._val = val
         self._sect_cursor: Optional[int] = None
         self.max = len(self._val)
         self.buffer = bytearray()
         self.subscribers = []
 
     @classmethod
+    def from_file(cls, scroll_nom: os.PathLike) -> Self:
+        self = cls(disk_factory(scroll_nom))
+        self.file = scroll_nom
+        return self
+
+    @classmethod
     def scratch(cls, size: int):
-        _val = [b'\0'* Sector_sz] * math.ceil(size / Sector_sz)
+        val = [b'\0' * Sector_sz] * math.ceil(size / Sector_sz)
+        return cls(val)
 
     def part_get(self, offset: int, mx: int = None) -> "Imagepart":
         mx = mx if mx is not None else self.max
@@ -369,9 +375,13 @@ class Image(SeqWrapper):
 
 class Imagepart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
-        super().__init__(img.file)
+        super().__init__(img._val)
         del self._val
-        del self.file
+        try:
+            # noinspection PyUnresolvedReferences
+            del self.file
+        except AttributeError:
+            pass
         self.mom = img
         self.offset = offset
         self.max = mx
@@ -751,9 +761,11 @@ def entry_from_file(file_nom: str) -> FileEntry:
     size = os.path.getsize(file_nom)
     return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
+
 def disk_format(host: Disk, codex_nom: str, fat_id: int):
     codex_struct = DiskStruct(fat_id)
-    codex_image = Image()
+    codex_image = Image.scratch(codex_struct.disk_sz)
+
 
 """
 todo:
