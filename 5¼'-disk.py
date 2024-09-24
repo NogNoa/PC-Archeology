@@ -459,7 +459,8 @@ class Imagepart(Image):
             self._byte_cursor = end
         return bytes(back)
 
-    def write(self, value: bytes, advance=True):
+    def write(self, value: bytes| int, advance=True):
+        if isinstance(value, int): value = value.to_bytes(byteorder="little")
         if self._sect_cursor is None:
             raise Exception("image buffer was not initilized. you need to call sect_buff()")
         end = self._byte_cursor + len(value)
@@ -540,28 +541,28 @@ class Fat12(Fat):
     def file_add(self, allocated: fat_t):
         self.img.sect_buff(allocated[0] // Sector_sz)
         for pl, cluster in enumerate(allocated[1:]):
-            # the index pl is off by 1 from the index of cluster
+            # the index pl is off by 1 from the index of cluster in allocated
             self[allocated[pl]] = cluster
-            self.cluster_to_image(allocated[pl], cluster)
+            self.image_update(allocated[pl], cluster)
         self[allocated[-1]] = 0xfff
-        self.cluster_to_image(allocated[-1], 0xfff)
+        self.image_update(allocated[-1], 0xfff)
 
     def file_del(self, pointer: int):
         file = self.file_locate(pointer)
         self.img.sect_buff()
         for loc in file:
             self._val[loc] = 0
-            self.cluster_to_image(loc, 0)
+            self.image_update(loc, 0)
 
-    def cluster_to_image(self, loc: int, value: int):
+    def image_update(self, loc: int, value: int):
         self.img.byte_seek_abs(loc * 3 // 2)
         b = self.img.read(2, advance=False)
         if loc % 2:
-            self.img.write(((b[0] % 0x10) +  0x10 * (value % 0x10)).to_bytes())
-            self.img.write((value // 0x10).to_bytes())
+            self.img.write((b[0] % 0x10) +  0x10 * (value % 0x10))
+            self.img.write(value // 0x10)
         else:
-            self.img.write((value % 0x100).to_bytes())
-            self.img.write(((value // 0x100) + 0x10 * (b[1] // 0x10)).to_bytes())
+            self.img.write(value % 0x100)
+            self.img.write((value // 0x100) + 0x10 * (b[1] // 0x10))
 
 
 class Directory(SeqWrapper):
@@ -655,6 +656,18 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
         table.append(last[0])
     return table
 
+def fat12_to_buffer(call: fat_t):
+    buffer: image_t = []
+    while call:
+        even, odd, call = call[0], call[1], call[2:]
+        buffer.append((even % 0x100).to_bytes())
+        buffer.append((even[0] % 0x10) + 0x10 * (odd % 0x10))
+    if loc % 2:
+        self.img.write((b[0] % 0x10) + 0x10 * (value % 0x10))
+        self.img.write(value // 0x10)
+    else:
+        self.img.write(value % 0x100)
+        self.img.write((value // 0x100) + 0x10 * (b[1] // 0x10))
 
 def ms_time(call: bytes) -> dict[str, int]:
     hour = call[1] // 8  # 11..16
