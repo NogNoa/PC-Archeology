@@ -324,6 +324,7 @@ class Image(SeqWrapper):
 
     def __init__(self, val: image_t):
         self._val = val
+        self.file = None
         self._sect_cursor: Optional[int] = None
         self.max = len(self._val)
         self.buffer = bytearray()
@@ -366,6 +367,7 @@ class Image(SeqWrapper):
         self.buffer.clear()
 
     def flush(self):
+        if self.file is None: return
         for sub in self.subscribers:
             sub.iner_flush()
         self.iner_flush()
@@ -377,11 +379,7 @@ class Imagepart(Image):
     def __init__(self, img: Image, offset: int, mx: int):
         super().__init__(img._val)
         del self._val
-        try:
-            # noinspection PyUnresolvedReferences
-            del self.file
-        except AttributeError:
-            pass
+        del self.file
         self.mom = img
         self.offset = offset
         self.max = mx
@@ -765,6 +763,9 @@ def entry_from_file(file_nom: str) -> FileEntry:
 def disk_format(host: Disk, codex_nom: str, fat_id: int):
     codex_struct = DiskStruct(fat_id)
     codex_image = Image.scratch(codex_struct.disk_sz)
+    codex_image.file = codex_nom
+    codex_image[0] = host.boot
+    codex_image[Fat_Offset] = None
 
 
 """
