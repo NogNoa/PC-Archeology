@@ -656,18 +656,16 @@ def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
         table.append(last[0])
     return table
 
-def fat12_to_buffer(call: fat_t):
-    buffer: image_t = []
+
+def fat12_to_buffer(call: fat_t) -> image_t:
+    buffer: list[int] = []
     while call:
         even, odd, call = call[0], call[1], call[2:]
-        buffer.append((even % 0x100).to_bytes())
-        buffer.append((even[0] % 0x10) + 0x10 * (odd % 0x10))
-    if loc % 2:
-        self.img.write((b[0] % 0x10) + 0x10 * (value % 0x10))
-        self.img.write(value // 0x10)
-    else:
-        self.img.write(value % 0x100)
-        self.img.write((value // 0x100) + 0x10 * (b[1] // 0x10))
+        buffer.append(even % 0x100)
+        buffer.append((even // 0x100) + 0x100 * (odd % 0x10))
+        buffer.append(odd // 0x10)
+    return [b.to_bytes() for b in buffer]
+
 
 def ms_time(call: bytes) -> dict[str, int]:
     hour = call[1] // 8  # 11..16
