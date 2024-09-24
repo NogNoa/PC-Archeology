@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import math
 import os
 import pathlib
 import sys
@@ -205,6 +206,9 @@ class Disk:
         self.fat.img.flush()
         self.img[self.struct.second_fat_floor: self.struct.root_dir_floor] = self.fat.img[:]
 
+    def format(self, codex_nom: str, fat_id: int):
+        disk_format(self, codex_nom, fat_id)
+
 
 @dataclasses.dataclass
 class DiskStruct:
@@ -325,6 +329,10 @@ class Image(SeqWrapper):
         self.max = len(self._val)
         self.buffer = bytearray()
         self.subscribers = []
+
+    @classmethod
+    def scratch(cls, size: int):
+        _val = [b'\0'* Sector_sz] * math.ceil(size / Sector_sz)
 
     def part_get(self, offset: int, mx: int = None) -> "Imagepart":
         mx = mx if mx is not None else self.max
@@ -743,6 +751,9 @@ def entry_from_file(file_nom: str) -> FileEntry:
     size = os.path.getsize(file_nom)
     return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
+def disk_format(host: Disk, codex_nom: str, fat_id: int):
+    codex_struct = DiskStruct(fat_id)
+    codex_image = Image()
 
 """
 todo:
