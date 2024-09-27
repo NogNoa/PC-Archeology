@@ -532,6 +532,7 @@ class Fat12(Fat):
         buffer = b''.join(buffer)
         self._val = fat12_factory(buffer, entrys)
         self.img = image
+        self.entries = entrys
 
     def file_locate(self, pointer: int) -> loc_t:
         file = []
@@ -653,14 +654,13 @@ def disk_factory(scroll_nom: str | os.PathLike) -> image_t:
 
 def fat12_factory(buffer: bytes, entrys: int) -> fat_t:
     table = []
-    for pl in range(0, entrys, 2):
-        entrii = buffer[3 * pl:3 * (pl+1)]
+    for _ in range(0, entrys, 2):
+        entrii, buffer = buffer[:3], buffer[3:]
         # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] & 0xF))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
     if entrys % 2 == 0:
-        last = buffer[3 * (entrys-1):3 * entrys]
-        table.append(last[0] + 0x100 * (last[1] & 0xF))
+        table.append(buffer[0] + 0x100 * (buffer[1] & 0xF))
     return table
 
 
