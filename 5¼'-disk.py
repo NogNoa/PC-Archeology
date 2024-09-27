@@ -100,7 +100,7 @@ class Disk:
         self.fili_img = self.img.part_get(self.struct.files_floor)
 
     @property
-    def boot(self) -> image_t:
+    def boot(self) -> bytes:
         return self.img[0]
 
     def dir(self):
@@ -669,11 +669,17 @@ def fat12_factory(buffer: bytes, entrys: int) -> fat_t:
 
 def fat12_to_buffer(call: fat_t) -> image_t:
     buffer: bytes = b''
-    while call:
-        even, odd, call = call[0], call[1], call[2:]
+    while True:
+        try:
+            even, odd, call = call[0], call[1], call[2:]
+        except IndexError:
+            if len(call):
+                even, odd, call = call[0], 0, []
+            else:
+                break
         buffer += (even + 0x1000 * odd).to_bytes(length=3, byteorder="little")
     buffer += b'\xF6' * (-len(buffer) % Sector_sz)
-    return [buffer[i: i + Sector_sz] for i in range(0, buffer, Sector_sz)]
+    return [buffer[i: i + Sector_sz] for i in range(0, len(buffer), Sector_sz)]
 
 
 def ms_time(call: bytes) -> dict[str, int]:
@@ -782,7 +788,7 @@ def entry_from_file(file_nom: str) -> FileEntry:
 
 def blank_prefix(host: Disk, fat_id: int) -> image_t:
     codex_struct = DiskStruct(fat_id)
-    boot = host.boot[0]
+    boot = host.boot
     if fat_id == 0xFF and boot[3] == b'\x08':
         boot = boot[:3] + b'\x10' + boot[4:]
     codex_image = [boot]
