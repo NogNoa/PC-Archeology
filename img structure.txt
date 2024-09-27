@@ -319,3 +319,4 @@ tpi = tracks per inch
 DD = double density, i.e two-sided
 */
 
+in ibmage a single-sector fat12 in practice only uses 1D9 (0d473) bytes, the first 3 being the fatid and 2*FF. this gives place for 0d313 entries with a reminder of a nibble. the files takes up only 0d314 clusters. So it seems the last cluster on the disk is implicitly last in any file?

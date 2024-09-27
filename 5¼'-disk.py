@@ -10,7 +10,6 @@ from typing import Optional, Generator, TypeAlias, Self
 from collections.abc import Iterator
 
 Sector_sz = 0x200
-Fat12_Entries = 0x155  # sector_sz * 2 // 3
 Cylinders = 40
 Reserved_Sectors = 1  # this has to be assumed to find fat-id in the first place
 Fat_Numb = 2
@@ -92,7 +91,7 @@ class Disk:
         self.struct = struct = DiskStruct(img[1][0])
         fat = img.part_get(Reserved_Sectors, struct.second_fat_floor)
         assert fat() == img[struct.second_fat_floor: struct.root_dir_floor]
-        self.fat = Fat12(fat, struct.fat_sz)
+        self.fat = Fat12(fat, struct.fat_entrys)
         root_dir = img.part_get(struct.root_dir_floor, struct.files_floor)
         self.root_dir = Directory(root_dir, self.struct.root_dir_entries)
         self.fili_img = self.img.part_get(self.struct.files_floor)
@@ -223,7 +222,13 @@ class DiskStruct:
     head_numb: int
 
     root_dir_sects: int
+    files_clusts: int
+    fat_entrys: int
     sector_numb: int
+
+    second_fat_floor: int
+    root_dir_floor: int
+    files_floor: int
 
     fat_sz: int
     track_sz: int
@@ -246,10 +251,6 @@ class DiskStruct:
     @property
     def fat_sz(self) -> int:
         return self.fat_sects * Sector_sz
-
-    @property
-    def fati_clusters(self) -> int:
-        return self.fat_sects * Fat_Numb // self.cluster_sects
 
     @property
     def track_sz(self) -> int:
@@ -286,6 +287,14 @@ class DiskStruct:
     @property
     def files_floor(self) -> int:
         return self.root_dir_floor + self.root_dir_sects
+
+    @property
+    def files_clusts(self) -> int:
+        return math.ceil((self.sector_numb - self.files_floor) / self.cluster_sects)
+
+    @property
+    def fat_entrys(self):
+        return self.files_clusts - 1
 
 
 # class ImagePart(image_t):
@@ -459,7 +468,7 @@ class Imagepart(Image):
             self._byte_cursor = end
         return bytes(back)
 
-    def write(self, value: bytes| int, advance=True):
+    def write(self, value: bytes | int, advance=True):
         if isinstance(value, int): value = value.to_bytes(byteorder="little")
         if self._sect_cursor is None:
             raise Exception("image buffer was not initilized. you need to call sect_buff()")
@@ -479,6 +488,7 @@ class Fat(SeqWrapper):
     def __init__(self):
         self._val: fat_t = []
         self.img = None
+        self.entries = 0
 
     @abstractmethod
     def file_locate(self, pointer: int) -> loc_t:
@@ -488,7 +498,7 @@ class Fat(SeqWrapper):
         """
         :return: list of locs for all files + a loc of the empty clusters
         """
-        unchecked = set(range(Fat_Offset, Fat12_Entries))
+        unchecked = set(range(Fat_Offset, self.entries))
         fili = []
         empty = []
         while unchecked:
@@ -517,10 +527,10 @@ class Fat(SeqWrapper):
 
 
 class Fat12(Fat):
-    def __init__(self, image: Imagepart, fat_sz: int):
+    def __init__(self, image: Imagepart, entrys: int):
         buffer = image[:]
         buffer = b''.join(buffer)
-        self._val = fat12_factory(buffer, fat_sz)
+        self._val = fat12_factory(buffer, entrys)
         self.img = image
 
     def file_locate(self, pointer: int) -> loc_t:
@@ -641,19 +651,16 @@ def disk_factory(scroll_nom: str | os.PathLike) -> image_t:
     return disk
 
 
-def fat12_factory(buffer: bytes, fat_sz: int) -> fat_t:
+def fat12_factory(buffer: bytes, entrys: int) -> fat_t:
     table = []
-    end = fat_sz % 3
-    buffer, last = buffer[:-end], buffer[-end:]
-    while buffer:
-        entrii, buffer = buffer[:3], buffer[3:]
+    for pl in range(0, entrys, 2):
+        entrii = buffer[3 * pl:3 * (pl+1)]
         # elements of bytes object are ints
         table.append(entrii[0] + 0x100 * (entrii[1] & 0xF))
         table.append((entrii[1] // 0x10) + 0x10 * entrii[2])
-    if end == 2:
+    if entrys % 2 == 0:
+        last = buffer[3 * (entrys-1):3 * entrys]
         table.append(last[0] + 0x100 * (last[1] & 0xF))
-    elif end == 1:
-        table.append(last[0])
     return table
 
 
