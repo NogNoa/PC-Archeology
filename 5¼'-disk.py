@@ -87,6 +87,10 @@ file_desc_t : TypeAlias = tuple[FileEntry, loc_t]
 
 
 class Disk:
+
+    class OutOfSpace(Exception):
+        pass
+
     def __init__(self, scroll_nom: str | os.PathLike, read_only: bool = True):
         self.read_only = read_only
         self.path = pathlib.Path(scroll_nom)
@@ -189,7 +193,7 @@ class Disk:
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
-                raise Exception("Not enough space for "+file_nom) from err
+                raise Disk.OutOfSpace("Not enough space for "+file_nom) from err
             self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
         self.fat.file_add(allocated)
@@ -492,6 +496,14 @@ class Imagepart(Image):
 class Fat(SeqWrapper):
     item_type = int
 
+    class ReadError(Exception):
+        def __init__(self, code, back):
+            opt = "Empty" if code == 0 else "Bad" if code == 0xFF7 else "Reserved"
+            message = f"Read Error: {opt} cluster"
+            super().__init__(message)
+            self.code = code
+            self.back = back
+
     @abstractmethod
     def __init__(self):
         self._val: fat_t = []
@@ -513,7 +525,7 @@ class Fat(SeqWrapper):
             pointer = min(unchecked)
             try:
                 file = self.file_locate(pointer)
-            except FatReadError as err:
+            except Fat.ReadError as err:
                 rem = err.back
                 if err.code == 0:
                     empty.append(pointer)
@@ -554,7 +566,7 @@ class Fat12(Fat):
                 if pointer >= 0xFF8:
                     break
                 else:
-                    raise FatReadError(pointer, file)
+                    raise Fat.ReadError(pointer, file)
         return file
 
     def file_add(self, allocated: fat_t):
@@ -587,6 +599,9 @@ class Fat12(Fat):
 class Directory(SeqWrapper):
     item_type = int
 
+    class ReadError(Exception):
+        pass
+
     def __init__(self, img: Imagepart, max_size: int):
         buffer: image_t = img[:]
         self._val = dir_factory(buffer)
@@ -606,7 +621,7 @@ class Directory(SeqWrapper):
         try:
             entry = tuple(filter(sieve, self._val))[0]
         except IndexError:
-            raise DirReadError(err_massage)
+            raise Directory.ReadError(err_massage)
         return entry
 
     def file_add(self, file_nom: str, pointer: int, file_sects: int = None):
@@ -636,7 +651,7 @@ class Directory(SeqWrapper):
             candidate = FileEntry.from_image(candidate, entry.physical_index)
             assert entry == candidate
         except AssertionError:
-            raise DirReadError(f"{entry} \ndiffer from \n{candidate}")
+            raise Directory.ReadError(f"{entry} \ndiffer from \n{candidate}")
         if virtual_index == len(self._val) - 1:
             self.img.write(b"\0")
         else:
@@ -730,19 +745,6 @@ def dir_factory(dir_img: image_t) -> dir_t:
             continue
         break
     return folder
-
-
-class FatReadError(Exception):
-    def __init__(self, code, back):
-        opt = "Empty" if code == 0 else "Bad" if code == 0xFF7 else "Reserved"
-        message = f"Read Error: {opt} cluster"
-        super().__init__(message)
-        self.code = code
-        self.back = back
-
-
-class DirReadError(Exception):
-    pass
 
 
 def sector_from_fat_loc(pointer: int, struct: DiskStruct) -> int:
@@ -842,16 +844,18 @@ def empty_disk(host: Disk, codex_nom: str, fat_id: int = None):
 def folder_to_disk(host, codex_nom: str, fat_id: int):
     empty_disk(host, codex_nom+".img", fat_id)
     codex = Disk(codex_nom+".img", read_only=False)
+    codex_index = 0
     for file in os.listdir(codex_nom):
         file = os.path.join(codex_nom, file)
         if os.path.isfile(file):
-            codex.file_add(file)
+            try:
+                codex.file_add(file)
+            except Disk.OutOfSpace:
+                codex_index += 1
+                empty_disk(host, f"{codex_nom}{codex_index}.img", fat_id)
+                codex = Disk(f"{codex_nom}{codex_index}.img", read_only=False)
+                codex.file_add(file)
 
-
-"""
-todo:
-    create disk from folder
-"""
 
 if __name__ == "__main__":
     def main():
@@ -862,7 +866,7 @@ if __name__ == "__main__":
         fili, emp = disk.fat.fili_locate()
         disk.disk_offset_print(fili)
         print(f"empty {emp}")
-        folder_to_disk(disk, sys.argv[2], disk.struct.fat_id)
+        disk.file_extract("io.obj")
         # disk.file_add(sys.argv[2])
 
 
