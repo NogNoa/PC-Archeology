@@ -294,7 +294,7 @@ class DiskStruct:
 
     @property
     def fat_entrys(self):
-        return self.files_clusts - 1
+        return self.files_clusts
 
 
 # class ImagePart(image_t):
@@ -669,8 +669,8 @@ def fat12_to_buffer(call: fat_t) -> image_t:
     while call:
         even, odd, call = call[0], call[1], call[2:]
         buffer += (even + 0x1000 * odd).to_bytes(byteorder="little")
-    buffer += b'\xF6' * (Sector_sz-len(buffer))
-    return [buffer]
+    buffer += b'\xF6' * (-len(buffer) % Sector_sz)
+    return [buffer[i: i + Sector_sz] for i in range(0, buffer, Sector_sz)]
 
 
 def ms_time(call: bytes) -> dict[str, int]:
@@ -779,10 +779,11 @@ def entry_from_file(file_nom: str) -> FileEntry:
 
 def disk_format(host: Disk, codex_nom: str, fat_id: int):
     codex_struct = DiskStruct(fat_id)
-    codex_image = Image.scratch(codex_struct.disk_sz)
-    codex_image.file = codex_nom
-    codex_image[0] = host.boot
-    codex_image[Fat_Offset] = None
+    codex_image: image_t = host.boot
+    fat = [fat_id | 0xF00, 0xFFF] + [0] * codex_struct.fat_entrys
+    codex_image += (fat12_to_buffer(fat) * Fat_Numb)
+
+
 
 
 """
