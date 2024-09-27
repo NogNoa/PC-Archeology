@@ -237,6 +237,7 @@ class DiskStruct:
     track_sz: int
     cluster_sz: int
     root_dir_sz: int
+    files_sz: int
     disk_sz: int
 
     def __init__(self, fat_id):
@@ -298,6 +299,9 @@ class DiskStruct:
     @property
     def fat_entrys(self):
         return self.files_clusts
+
+    def files_sz(self):
+        return Sector_sz * (self.sector_numb - self.files_floor)
 
 
 # class ImagePart(image_t):
@@ -786,15 +790,15 @@ def entry_from_file(file_nom: str) -> FileEntry:
     return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
 
-def blank_prefix(host: Disk, fat_id: int) -> image_t:
+def blank_prefix(host: Disk, fat_id: int) -> bytes:
     codex_struct = DiskStruct(fat_id)
     boot = host.boot
     if fat_id == 0xFF and boot[3] == b'\x08':
         boot = boot[:3] + b'\x10' + boot[4:]
     codex_image = [boot]
     fat = [fat_id | 0xF00, 0xFFF] + [0] * codex_struct.fat_entrys
-    codex_image += (fat12_to_buffer(fat) * Fat_Numb)
-    return codex_image
+    codex_image += fat12_to_buffer(fat) * Fat_Numb
+    return b''.join(codex_image)
 
 
 def disk_format(host: Disk, codex_nom: str, fat_id: int):
@@ -805,14 +809,27 @@ def disk_format(host: Disk, codex_nom: str, fat_id: int):
     if os.path.exists(codex_nom):
         scroll = Disk(codex_nom, read_only=False)
         root_dir = bytearray(b''.join(scroll.img[codex_struct.root_dir_floor:codex_struct.files_floor]))
-        suffix = scroll.img[codex_struct.files_floor:]
+        suffix =  b''.join(scroll.img[codex_struct.files_floor:])
     else:
         root_dir = bytearray(b'\xF6' * Sector_sz * codex_struct.root_dir_sects)
-        suffix = [b'\xF6' * Sector_sz] * codex_struct.files_clusts * codex_struct.cluster_sects
+        suffix = b'\xF6' * codex_struct.files_sz
     for i in range(0, Sector_sz * codex_struct.root_dir_sects, 0x20):
         root_dir[i:i+1] = b'\xE5'
     prefix = blank_prefix(host, fat_id)
-    codex = b''.join(prefix) + bytes(root_dir) + b''.join(suffix)
+    codex = prefix + bytes(root_dir) + suffix
+    with open(codex_nom, "bw+") as file:
+        file.write(codex)
+
+
+def empty_disk(host: Disk, codex_nom: str, fat_id: int):
+    codex_nom = pathlib.Path(codex_nom)
+    if not codex_nom.suffix.startswith(".im"):
+        raise ArgumentError(None, "I'll only agree to format files with an im? extention")
+    codex_struct = DiskStruct(fat_id)
+    prefix = blank_prefix(host, fat_id)
+    root_dir = (b'\xE5' + b'xF6' * 0x1F) * codex_struct.root_dir_entries
+    suffix = b'\xF6' * codex_struct.files_sz
+    codex = prefix + root_dir + suffix
     with open(codex_nom, "bw+") as file:
         file.write(codex)
 
