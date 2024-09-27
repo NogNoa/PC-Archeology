@@ -1,3 +1,5 @@
+"""5¼'-disk"""
+
 import dataclasses
 import datetime
 import math
@@ -777,13 +779,19 @@ def entry_from_file(file_nom: str) -> FileEntry:
     return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
 
-def disk_format(host: Disk, codex_nom: str, fat_id: int):
+def blank_prefix(host: Disk, fat_id: int) -> image_t:
     codex_struct = DiskStruct(fat_id)
-    codex_image: image_t = host.boot
+    boot = host.boot[0]
+    if fat_id == 0xFF and boot[3] == b'\x08':
+        boot = boot[:3] + b'\x10' + boot[4:]
+    codex_image = [boot]
     fat = [fat_id | 0xF00, 0xFFF] + [0] * codex_struct.fat_entrys
     codex_image += (fat12_to_buffer(fat) * Fat_Numb)
+    return codex_image
 
+def format_disk(host: Disk, codex_nom: str, fat_id: int):
 
+    blank_prefix(host, fat_id)
 
 
 """
@@ -792,16 +800,16 @@ todo:
     create disk from folder
 """
 
+if __name__ == "__main__":
+    def main():
+        scrollnom = sys.argv[1]
+        scroll = pathlib.Path(scrollnom)
 
-def main():
-    scrollnom = sys.argv[1]
-    scroll = pathlib.Path(scrollnom)
-
-    disk = Disk(scroll, read_only=False)
-    fili, emp = disk.fat.fili_locate()
-    disk.disk_offset_print(fili)
-    print(f"empty {emp}")
-    # disk.file_add(sys.argv[2])
+        disk = Disk(scroll, read_only=False)
+        fili, emp = disk.fat.fili_locate()
+        disk.disk_offset_print(fili)
+        print(f"empty {emp}")
+        # disk.file_add(sys.argv[2])
 
 
-main()
+    main()
