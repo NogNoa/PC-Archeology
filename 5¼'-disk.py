@@ -673,11 +673,11 @@ def fat12_to_buffer(call: fat_t) -> image_t:
         try:
             even, odd, call = call[0], call[1], call[2:]
         except IndexError:
-            if len(call):
-                even, odd, call = call[0], 0, []
-            else:
-                break
-        buffer += (even + 0x1000 * odd).to_bytes(length=3, byteorder="little")
+            break
+        else:
+            buffer += (even + 0x1000 * odd).to_bytes(length=3, byteorder="little")
+    if len(call):
+        buffer += (call[0]).to_bytes(length=2, byteorder="little")
     buffer += b'\xF6' * (-len(buffer) % Sector_sz)
     return [buffer[i: i + Sector_sz] for i in range(0, len(buffer), Sector_sz)]
 
