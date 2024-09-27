@@ -8,6 +8,7 @@ import pathlib
 import sys
 import time
 from abc import abstractmethod
+from argparse import ArgumentError
 from typing import Optional, Generator, TypeAlias, Self
 from collections.abc import Iterator
 
@@ -670,7 +671,7 @@ def fat12_to_buffer(call: fat_t) -> image_t:
     buffer: bytes = b''
     while call:
         even, odd, call = call[0], call[1], call[2:]
-        buffer += (even + 0x1000 * odd).to_bytes(byteorder="little")
+        buffer += (even + 0x1000 * odd).to_bytes(length=3, byteorder="little")
     buffer += b'\xF6' * (-len(buffer) % Sector_sz)
     return [buffer[i: i + Sector_sz] for i in range(0, buffer, Sector_sz)]
 
@@ -789,9 +790,25 @@ def blank_prefix(host: Disk, fat_id: int) -> image_t:
     codex_image += (fat12_to_buffer(fat) * Fat_Numb)
     return codex_image
 
-def format_disk(host: Disk, codex_nom: str, fat_id: int):
 
-    blank_prefix(host, fat_id)
+def disk_format(host: Disk, codex_nom: str, fat_id: int):
+    codex_nom = pathlib.Path(codex_nom)
+    if not codex_nom.suffix.startswith(".im"):
+        raise ArgumentError(None, "I'll only agree to format files with an im? extention")
+    codex_struct = DiskStruct(fat_id)
+    if os.path.exists(codex_nom):
+        scroll = Disk(codex_nom, read_only=False)
+        root_dir = bytearray(b''.join(scroll.img[codex_struct.root_dir_floor:codex_struct.files_floor]))
+        suffix = scroll.img[codex_struct.files_floor:]
+    else:
+        root_dir = bytearray(b'\xF6' * Sector_sz * codex_struct.root_dir_sects)
+        suffix = [b'\xF6' * Sector_sz] * codex_struct.files_clusts * codex_struct.cluster_sects
+    for i in range(0, Sector_sz * codex_struct.root_dir_sects, 0x20):
+        root_dir[i:i+1] = b'\xE5'
+    prefix = blank_prefix(host, fat_id)
+    codex = b''.join(prefix) + bytes(root_dir) + b''.join(suffix)
+    with open(codex_nom, "bw+") as file:
+        file.write(codex)
 
 
 """
@@ -809,6 +826,7 @@ if __name__ == "__main__":
         fili, emp = disk.fat.fili_locate()
         disk.disk_offset_print(fili)
         print(f"empty {emp}")
+        disk.format(sys.argv[2], disk.struct.fat_id)
         # disk.file_add(sys.argv[2])
 
 
