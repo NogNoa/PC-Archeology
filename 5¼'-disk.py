@@ -182,17 +182,18 @@ class Disk:
         sectors = list(file_read(file_nom))
         sectors[-1] += b'\xf6' * (Sector_sz - len(sectors[-1]))
         sectors += [b'\xf6' * Sector_sz] * (-len(sectors) % self.struct.cluster_sects)
-        for clust in range(math.ceil(len(sectors)/ self.struct.cluster_sects)):
+        for clust in range(0, len(sectors), self.struct.cluster_sects):
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
                 raise Disk.OutOfSpace("Not enough space for "+file_nom) from err
             allocated.append(pointer)
-        self.fili_img[self.cluster_slice_get(allocated[0]).start:self.cluster_slice_get(allocated[-1]).stop] = sectors
+            self.fili_img[self.cluster_slice_get(pointer)] = sectors[clust: clust + self.struct.cluster_sects]
         self.fat.file_add(allocated)
         self.sync_other_fats()
         entry_size = self.root_dir.file_add(file_nom, allocated[0])
-        assert len(allocated) - self.struct.cluster_sects <= entry_size // (Sector_sz * self.struct.cluster_sects) <= len(allocated)
+        assert (len(allocated) - self.struct.cluster_sects <=
+                entry_size // (Sector_sz * self.struct.cluster_sects) <= len(allocated))
         self.img.flush()
 
     def file_del(self, nom: str):
@@ -302,11 +303,6 @@ class DiskStruct:
     def files_sz(self):
         return Sector_sz * (self.sector_numb - self.files_floor)
 
-
-# class ImagePart(image_t):
-#     def __init__(self, img: image_t, offset: int):
-#         I wanted to use the part like a c pointer that can change the image from the middle
-#         but python is just not like that. The object will have its own local copy of the image.
 
 class SeqWrapper:
     item_type = any
@@ -635,12 +631,6 @@ class Directory(SeqWrapper):
         self._val.append(entry)
         return entry.size
 
-    """
-    file_sects - cluster_sects <= entry.size // Sector_sz <= file_sects
-    file_sects = len(allocated) * cluster_sects
-    (len(allocated) - 1) * cluster_sects <= entry.size // Sector_sz <= len(allocated) * cluster_sects
-    """
-
     def file_del(self, entry: FileEntry):
         virtual_index = self._val.index(entry)
         self.img.sect_buff()
@@ -656,6 +646,7 @@ class Directory(SeqWrapper):
         else:
             self.img.write(b'\xE5')
         del self._val[virtual_index]
+
 
 class FatIDError(Exception):
     def __init__(self, fat_id):
