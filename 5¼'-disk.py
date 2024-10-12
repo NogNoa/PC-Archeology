@@ -180,9 +180,9 @@ class Disk:
         empty = self.fat.fili_locate()[1]
         allocated = []
         sectors = list(file_read(file_nom))
-        file_sects = len(sectors)
         sectors[-1] += b'\xf6' * (Sector_sz - len(sectors[-1]))
-        for clust in range(math.ceil(file_sects/ self.struct.cluster_sects)):
+        sectors += [b'\xf6' * Sector_sz] * (-len(sectors) % self.struct.cluster_sects)
+        for clust in range(math.ceil(len(sectors)/ self.struct.cluster_sects)):
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
