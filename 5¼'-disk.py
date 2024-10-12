@@ -182,13 +182,15 @@ class Disk:
         sectors = file_read(file_nom)
         loop = True
         while loop:
-            cluster = [b'\0' * Sector_sz] * self.struct.cluster_sects
+            cluster = [b''] * self.struct.cluster_sects
             for ind in range(self.struct.cluster_sects):
                 try:
-                    cluster[ind] = next(sectors)
+                    sect = next(sectors)
                 except StopIteration:
                     loop = False
                     break
+                else:
+                    cluster[ind] = sect + b'\xf6' * (Sector_sz - len(sect))
             if not loop: break
             try:
                 pointer, empty = empty[0], empty[1:]
@@ -866,8 +868,11 @@ if __name__ == "__main__":
         fili, emp = disk.fat.fili_locate()
         disk.disk_offset_print(fili)
         print(f"empty {emp}")
-        disk.file_extract("io.obj")
+        # for arg in sys.argv[2:]:
+        #     disk.file_extract(arg)
+
         # disk.file_add(sys.argv[2])
+        folder_to_disk(disk, sys.argv[2], disk.struct.fat_id)
 
 
     main()
