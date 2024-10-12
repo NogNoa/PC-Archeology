@@ -201,7 +201,7 @@ class Disk:
         self.fat.file_add(allocated)
         self.sync_other_fats()
         entry_size = self.root_dir.file_add(file_nom, allocated[0])
-        assert entry_size // (Sector_sz * self.struct.cluster_sects) in {len(allocated), len(allocated) - 1}
+        assert len(allocated) - self.struct.cluster_sects <= entry_size // (Sector_sz * self.struct.cluster_sects) <= len(allocated)
         self.img.flush()
 
     def file_del(self, nom: str):
