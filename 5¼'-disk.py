@@ -179,25 +179,16 @@ class Disk:
             raise Exception("Tried to write a file to disk opened in read-only mode")
         empty = self.fat.fili_locate()[1]
         allocated = []
-        sectors = file_read(file_nom)
-        loop = True
-        while loop:
-            cluster = [b'\xf6' * Sector_sz] * self.struct.cluster_sects
-            for ind in range(self.struct.cluster_sects):
-                try:
-                    sect = next(sectors)
-                except StopIteration:
-                    loop = False
-                    break
-                else:
-                    cluster[ind] = sect + b'\xf6' * (Sector_sz - len(sect))
-            if not cluster[0]: break
+        sectors = list(file_read(file_nom))
+        file_sects = len(sectors)
+        sectors[-1] += b'\xf6' * (Sector_sz - len(sectors[-1]))
+        for clust in range(math.ceil(file_sects/ self.struct.cluster_sects)):
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
                 raise Disk.OutOfSpace("Not enough space for "+file_nom) from err
-            self.fili_img[self.cluster_slice_get(pointer)] = cluster
             allocated.append(pointer)
+        self.fili_img[self.cluster_slice_get(allocated[0]).start:self.cluster_slice_get(allocated[-1]).stop] = sectors
         self.fat.file_add(allocated)
         self.sync_other_fats()
         entry_size = self.root_dir.file_add(file_nom, allocated[0])
