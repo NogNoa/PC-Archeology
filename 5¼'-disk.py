@@ -182,7 +182,7 @@ class Disk:
         sectors = file_read(file_nom)
         loop = True
         while loop:
-            cluster = [b''] * self.struct.cluster_sects
+            cluster = [b'\xf6' * Sector_sz] * self.struct.cluster_sects
             for ind in range(self.struct.cluster_sects):
                 try:
                     sect = next(sectors)
@@ -191,7 +191,7 @@ class Disk:
                     break
                 else:
                     cluster[ind] = sect + b'\xf6' * (Sector_sz - len(sect))
-            if not loop: break
+            if not cluster[0]: break
             try:
                 pointer, empty = empty[0], empty[1:]
             except IndexError as err:
@@ -200,7 +200,8 @@ class Disk:
             allocated.append(pointer)
         self.fat.file_add(allocated)
         self.sync_other_fats()
-        self.root_dir.file_add(file_nom, allocated[0], len(allocated) // self.struct.cluster_sects)
+        entry_size = self.root_dir.file_add(file_nom, allocated[0])
+        assert entry_size // (Sector_sz * self.struct.cluster_sects) in {len(allocated), len(allocated) - 1}
         self.img.flush()
 
     def file_del(self, nom: str):
@@ -626,11 +627,9 @@ class Directory(SeqWrapper):
             raise Directory.ReadError(err_massage)
         return entry
 
-    def file_add(self, file_nom: str, pointer: int, file_sects: int = None):
+    def file_add(self, file_nom: str, pointer: int) -> int:
         entry = entry_from_file(file_nom)
         entry.first_cluster = pointer
-        if file_sects:
-            assert (entry.size // Sector_sz) in {file_sects, file_sects - 1}
         self.img.sect_buff()
         φ = 0
         while True:
@@ -643,6 +642,13 @@ class Directory(SeqWrapper):
         entry.physical_index = φ
         self.img.write(entry.to_image())
         self._val.append(entry)
+        return entry.size
+
+    """
+    file_sects - cluster_sects <= entry.size // Sector_sz <= file_sects
+    file_sects = len(allocated) * cluster_sects
+    (len(allocated) - 1) * cluster_sects <= entry.size // Sector_sz <= len(allocated) * cluster_sects
+    """
 
     def file_del(self, entry: FileEntry):
         virtual_index = self._val.index(entry)
@@ -659,7 +665,6 @@ class Directory(SeqWrapper):
         else:
             self.img.write(b'\xE5')
         del self._val[virtual_index]
-
 
 class FatIDError(Exception):
     def __init__(self, fat_id):
@@ -792,6 +797,10 @@ def entry_from_file(file_nom: str) -> FileEntry:
     access_date = datetime.date(yeari[1], time_structi[1].tm_mon, time_structi[1].tm_mday)
     write_datetime = datetime.datetime(yeari[2], *write_datetime)
     size = os.path.getsize(file_nom)
+    if not size:
+        with open(file_nom, "r") as file:
+            file.seek(0, 2)
+            size = file.tell()
     return FileEntry(basename, ext, create_datetime, access_date, write_datetime, 0, size, 0)
 
 
@@ -872,7 +881,7 @@ if __name__ == "__main__":
         #     disk.file_extract(arg)
 
         # disk.file_add(sys.argv[2])
-        folder_to_disk(disk, sys.argv[2], disk.struct.fat_id)
+        folder_to_disk(disk, sys.argv[2], 0xff)
 
 
     main()
