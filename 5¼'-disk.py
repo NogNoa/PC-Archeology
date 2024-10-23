@@ -177,6 +177,8 @@ class Disk:
     def file_add(self, file_nom: str):
         if self.read_only:
             raise Exception("Tried to write a file to disk opened in read-only mode")
+        if file_nom in self.root_dir.fili_names:
+            self.file_del(file_nom, flush=False)
         empty = self.fat.fili_locate()[1]
         allocated = []
         sectors = list(file_read(file_nom))
@@ -196,12 +198,12 @@ class Disk:
                 entry_size // (Sector_sz * self.struct.cluster_sects) <= len(allocated))
         self.img.flush()
 
-    def file_del(self, nom: str):
+    def file_del(self, nom: str, flush=True):
         entry = self.root_dir[nom]
         self.fat.file_del(entry.first_cluster)
         self.sync_other_fats()
         self.root_dir.file_del(entry)
-        self.img.flush()
+        if flush: self.img.flush()
 
     def sync_other_fats(self):
         self.fat.img.flush()
@@ -646,6 +648,10 @@ class Directory(SeqWrapper):
         else:
             self.img.write(b'\xE5')
         del self._val[virtual_index]
+
+    @property
+    def fili_names(self) -> Iterator[str]:
+        return (f.name for f in self._val)
 
 
 class FatIDError(Exception):
