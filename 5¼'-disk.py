@@ -821,7 +821,7 @@ def disk_format(host: Disk, codex_nom: str, fat_id: int = None):
         file.write(codex)
 
 
-def empty_disk(host: Disk, codex_nom: str, fat_id: int = None):
+def empty_disk(host: Disk, codex_nom: str, fat_id: int = None) -> Disk:
     codex_nom = pathlib.Path(codex_nom)
     if not codex_nom.suffix.startswith(".im"):
         raise ArgumentError(None, "I'll only agree to format files with an im? extention")
@@ -832,11 +832,11 @@ def empty_disk(host: Disk, codex_nom: str, fat_id: int = None):
     codex = prefix + root_dir + suffix
     with open(codex_nom, "bw+") as file:
         file.write(codex)
+    return Disk(codex_nom, read_only=False)
 
 
 def folder_to_disk(host, codex_nom: str, fat_id: int):
-    empty_disk(host, codex_nom+".img", fat_id)
-    codex = Disk(codex_nom+".img", read_only=False)
+    codex = empty_disk(host, codex_nom+".img", fat_id)
     codex_index = 0
     folder = [s.casefold() for s in os.listdir(codex_nom)]
     for file_nom in ("ibmbio.com", "ibmdos.com"):
@@ -844,15 +844,14 @@ def folder_to_disk(host, codex_nom: str, fat_id: int):
         if os.path.isfile(file):
             codex.file_add(file)
             folder.remove(file_nom.casefold())
-    for file in os.listdir(codex_nom):
+    for file in folder:
         file = os.path.join(codex_nom, file)
         if not os.path.isfile(file): continue
         try:
             codex.file_add(file)
         except Disk.OutOfSpace:
             codex_index += 1
-            empty_disk(host, f"{codex_nom}{codex_index}.img", fat_id)
-            codex = Disk(f"{codex_nom}{codex_index}.img", read_only=False)
+            codex = empty_disk(host, f"{codex_nom}{codex_index}.img", fat_id)
             codex.file_add(file)
 
 
