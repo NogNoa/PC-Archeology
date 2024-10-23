@@ -838,16 +838,22 @@ def folder_to_disk(host, codex_nom: str, fat_id: int):
     empty_disk(host, codex_nom+".img", fat_id)
     codex = Disk(codex_nom+".img", read_only=False)
     codex_index = 0
+    folder = [s.casefold() for s in os.listdir(codex_nom)]
+    for file_nom in ("ibmbio.com", "ibmdos.com"):
+        file = os.path.join(codex_nom, file_nom)
+        if os.path.isfile(file):
+            codex.file_add(file)
+            folder.remove(file_nom.casefold())
     for file in os.listdir(codex_nom):
         file = os.path.join(codex_nom, file)
-        if os.path.isfile(file):
-            try:
-                codex.file_add(file)
-            except Disk.OutOfSpace:
-                codex_index += 1
-                empty_disk(host, f"{codex_nom}{codex_index}.img", fat_id)
-                codex = Disk(f"{codex_nom}{codex_index}.img", read_only=False)
-                codex.file_add(file)
+        if not os.path.isfile(file): continue
+        try:
+            codex.file_add(file)
+        except Disk.OutOfSpace:
+            codex_index += 1
+            empty_disk(host, f"{codex_nom}{codex_index}.img", fat_id)
+            codex = Disk(f"{codex_nom}{codex_index}.img", read_only=False)
+            codex.file_add(file)
 
 
 if __name__ == "__main__":
@@ -859,6 +865,7 @@ if __name__ == "__main__":
         fili, emp = disk.fat.fili_locate()
         disk.disk_offset_print(fili)
         print(f"empty {emp}")
+        # disk.fili_extract()
         # for arg in sys.argv[2:]:
         #     disk.file_extract(arg)
 
