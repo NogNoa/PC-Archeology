@@ -845,12 +845,12 @@ def empty_disk(host: Disk, codex_nom: str, fat_id: int = None) -> Disk:
 def folder_to_disk(host, codex_nom: str, fat_id: int):
     codex = empty_disk(host, codex_nom+".img", fat_id)
     codex_index = 0
-    folder = [s.casefold() for s in os.listdir(codex_nom)]
-    for file_nom in ("ibmbio.com", "ibmdos.com", "command.com"):
+    folder = [s.upper() for s in os.listdir(codex_nom)]
+    for file_nom in ("IBMBIO.COM", "IBMDOS.COM", "COMMAND.COM"):
         file = os.path.join(codex_nom, file_nom)
         if os.path.isfile(file):
             codex.file_add(file, system=True)
-            folder.remove(file_nom.casefold())
+            folder.remove(file_nom.upper())
     for file in folder:
         file = os.path.join(codex_nom, file)
         if not os.path.isfile(file): continue
@@ -876,7 +876,7 @@ if __name__ == "__main__":
         #     disk.file_extract(arg)
 
         # disk.file_add(sys.argv[2])
-        # folder_to_disk(disk, sys.argv[2], 0xff)
+        folder_to_disk(disk, sys.argv[2], 0xff)
 
 
     main()
