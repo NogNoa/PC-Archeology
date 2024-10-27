@@ -174,7 +174,7 @@ class Disk:
             loc = ", ".join(loc)
             print(entry.full_name, loc)
 
-    def file_add(self, file_nom: str):
+    def file_add(self, file_nom: str, system=False):
         if self.read_only:
             raise Exception("Tried to write a file to disk opened in read-only mode")
         if file_nom in self.root_dir.fili_names:
@@ -193,7 +193,7 @@ class Disk:
             self.fili_img[self.cluster_slice_get(pointer)] = sectors[clust: clust + self.struct.cluster_sects]
         self.fat.file_add(allocated)
         self.sync_other_fats()
-        entry_size = self.root_dir.file_add(file_nom, allocated[0])
+        entry_size = self.root_dir.file_add(file_nom, allocated[0], system)
         assert (len(allocated) - self.struct.cluster_sects <=
                 entry_size // (Sector_sz * self.struct.cluster_sects) <= len(allocated))
         self.img.flush()
@@ -616,9 +616,10 @@ class Directory(SeqWrapper):
             raise Directory.ReadError(err_massage)
         return entry
 
-    def file_add(self, file_nom: str, pointer: int) -> int:
+    def file_add(self, file_nom: str, pointer: int, system=False) -> int:
         entry = entry_from_file(file_nom)
         entry.first_cluster = pointer
+        entry.hidden = entry.system_file = system
         self.img.sect_buff()
         φ = 0
         while True:
@@ -845,10 +846,10 @@ def folder_to_disk(host, codex_nom: str, fat_id: int):
     codex = empty_disk(host, codex_nom+".img", fat_id)
     codex_index = 0
     folder = [s.casefold() for s in os.listdir(codex_nom)]
-    for file_nom in ("ibmbio.com", "ibmdos.com"):
+    for file_nom in ("ibmbio.com", "ibmdos.com", "command.com"):
         file = os.path.join(codex_nom, file_nom)
         if os.path.isfile(file):
-            codex.file_add(file)
+            codex.file_add(file, system=True)
             folder.remove(file_nom.casefold())
     for file in folder:
         file = os.path.join(codex_nom, file)
@@ -875,7 +876,7 @@ if __name__ == "__main__":
         #     disk.file_extract(arg)
 
         # disk.file_add(sys.argv[2])
-        folder_to_disk(disk, sys.argv[2], 0xff)
+        # folder_to_disk(disk, sys.argv[2], 0xff)
 
 
     main()
