@@ -1,5 +1,5 @@
 """5¼'-disk"""
-
+import argparse
 import dataclasses
 import datetime
 import math
@@ -864,19 +864,25 @@ def folder_to_disk(host, codex_nom: str, fat_id: int):
 
 if __name__ == "__main__":
     def main():
-        scrollnom = sys.argv[1]
-        scroll = pathlib.Path(scrollnom)
+        parser = argparse.ArgumentParser()
+        parser.add_argument("action")
+        parser.add_argument("scroll")
+        parser.add_argument("-f","--folder", default=None)
+        args = parser.parse_args()
+        scroll = pathlib.Path(args.scroll)
 
         disk = Disk(scroll, read_only=False)
         fili, emp = disk.fat.fili_locate()
         disk.disk_offset_print(fili)
         print(f"empty {emp}")
-        # disk.fili_extract()
+        if args.action.startswith("extract"):
+            disk.fili_extract()
         # for arg in sys.argv[2:]:
         #     disk.file_extract(arg)
 
         # disk.file_add(sys.argv[2])
-        folder_to_disk(disk, sys.argv[2], 0xff)
+        if args.action.startswith("create"):
+            folder_to_disk(disk, args.folder, 0xff)
 
 
     main()
