@@ -5,11 +5,10 @@ import datetime
 import math
 import os
 import pathlib
-import sys
 import time
 from abc import abstractmethod
 from argparse import ArgumentError
-from typing import Optional, Generator, TypeAlias, Self
+from typing import Optional, Generator, TypeAlias, Self, Any
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -434,6 +433,8 @@ class Imagepart(Image):
             else:
                 stop = self.offset + index.stop
             return self.mom[start: stop: index.step]
+        else:
+            raise TypeError
 
     def __contains__(self, item) -> bool:
         return item in self()
@@ -665,6 +666,7 @@ def disk_factory(scroll_nom: str | os.PathLike) -> image_t:
     with open(scroll_nom, "br") as file:
         scroll = file.read()
     disk = []
+    # noinspection PyUnboundLocalVariable
     while scroll:
         sector, scroll = scroll[:Sector_sz], scroll[Sector_sz:]
         disk.append(sector)
@@ -763,7 +765,7 @@ def loc_list_to_ranges(loci: loc_t) -> list[tuple[int, int]]:
     return back
 
 
-def file_read(file_nom: str) -> Generator[bytes, any, None]:
+def file_read(file_nom: str) -> Generator[bytes, Any, None]:
     with open(file_nom, mode="rb") as file:
         while sector := file.read(Sector_sz):
             yield sector
@@ -867,7 +869,8 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("action")
         parser.add_argument("scroll")
-        parser.add_argument("-f","--folder", default=None)
+        parser.add_argument("-f", "--folder", default=None)
+        parser.add_argument("-n", "--new", action="store_true")
         args = parser.parse_args()
         scroll = pathlib.Path(args.scroll)
 

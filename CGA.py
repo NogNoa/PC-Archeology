@@ -28,7 +28,7 @@ def draw_low_middle(call: bytes):
     while call:
         x = 0
         for byte in call[:0x10]:
-            pix_quad = byte, byte >> 2, byte >> 4, byte >> 6
+            pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
             pix_quad = (p & 3 for p in pix_quad)
             for pl, p in enumerate(pix_quad):
                 pixels[x + pl, y] = CGA_mode4_pallete_1(p)
