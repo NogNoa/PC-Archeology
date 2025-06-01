@@ -42,8 +42,9 @@ def draw_low_middle(call: bytes):
 
 def draw_CG(call: bytes):
     for pli, byte in enumerate(call):
-        x = pli * 4 % LINE_SZ
-        y = pli // LINE_SZ
+        pli *= 4
+        x = pli % LINE_SZ
+        y = pli // LINE_SZ * 2 % FIELD_SZ + (pli // FIELD_SZ)
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for plj, p in enumerate(pix_quad):
@@ -59,7 +60,7 @@ if sys.argv[2] == "lm":
     pixels = image.load()
     draw_low_middle(scroll)
 elif sys.argv[2] == "cg":
-    image = Image.new("RGB", (LINE_SZ, len(scroll) // LINE_SZ + 1))
+    image = Image.new("RGB", (LINE_SZ, len(scroll) // LINE_SZ * 4 + 1))
     pixels = image.load()
     draw_CG(scroll)
 else:
