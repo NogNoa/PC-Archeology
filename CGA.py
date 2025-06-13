@@ -44,16 +44,14 @@ def draw_low_middle(call: bytes):
 
 def draw_CG(call: bytes):
     for pli, byte in enumerate(call):
-        x = pli % LINE_SZ
-        y = pli % FIELD_SZ // LINE_SZ
         field_i = pli // FIELD_SZ
+        pli %= FIELD_SZ
+        x = pli % LINE_SZ
+        y = pli // LINE_SZ
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for plj, p in enumerate(pix_quad):
-            try:
-                pixels[4 * x + plj, 2 * y + field_i] = CGA_mode4_pallete_1(p)
-            except IndexError:
-                print("actual x:", 4 * x + plj, "actual y:", 2 * y + field_i)
+            pixels[4 * x + plj, 2 * y + field_i] = CGA_mode4_pallete_1(p)
 
 
 scroll_nom = sys.argv[1]
@@ -65,7 +63,7 @@ if sys.argv[2] == "lm":
     pixels = image.load()
     draw_low_middle(scroll)
 elif sys.argv[2] == "cg":
-    image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 1))
+    image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 2))
     pixels = image.load()
     draw_CG(scroll)
 else:
