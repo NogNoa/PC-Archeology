@@ -46,12 +46,12 @@ def draw_CG(call: bytes):
     for byte_i, byte in enumerate(call):
         field_i = byte_i // FIELD_SZ
         byte_i %= FIELD_SZ
-        x = byte_i % LINE_SZ
-        y = byte_i // LINE_SZ
+        x = 4 * (byte_i % LINE_SZ)
+        y = 2 * (byte_i // LINE_SZ) + field_i
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for pixel_i, p in enumerate(pix_quad):
-            pixels[4 * x + pixel_i, 2 * y + field_i] = CGA_mode4_pallete_1(p)
+            pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
 
 
 scroll_nom = sys.argv[1]
