@@ -8,7 +8,8 @@ FIELD_SZ = 0x2000
 LINE_PIX = 320
 LINE_SZ = LINE_PIX  // 4
 
-# CG hight is 205
+# CG hight is 205 lines
+
 
 def CGA_pallete(index: int) -> tuple[int, int, int]:
     index = index % 0x10
