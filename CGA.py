@@ -5,7 +5,8 @@ from PIL import Image
 BG = (0, 0, 0xAA)
 GLOBAL_INTENSITY = 0x55
 FIELD_SZ = 0x2000
-LINE_SZ = 320
+LINE_PIX = 320
+LINE_SZ = LINE_PIX  // 4
 
 
 def CGA_pallete(index: int) -> tuple[int, int, int]:
@@ -42,12 +43,12 @@ def draw_low_middle(call: bytes):
 
 def draw_CG(call: bytes):
     for pli, byte in enumerate(call):
-        x = pli * 4 % LINE_SZ
+        x = pli % LINE_SZ
         y = pli // LINE_SZ
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for plj, p in enumerate(pix_quad):
-            pixels[x + plj, y] = CGA_mode4_pallete_1(p)
+            pixels[x * 4 + plj, y] = CGA_mode4_pallete_1(p)
 
 
 scroll_nom = sys.argv[1]
@@ -59,7 +60,7 @@ if sys.argv[2] == "lm":
     pixels = image.load()
     draw_low_middle(scroll)
 elif sys.argv[2] == "cg":
-    image = Image.new("RGB", (LINE_SZ, len(scroll) // LINE_SZ + 1))
+    image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 1))
     pixels = image.load()
     draw_CG(scroll)
 else:
