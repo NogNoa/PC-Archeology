@@ -8,6 +8,7 @@ FIELD_SZ = 0x2000
 LINE_PIX = 320
 LINE_SZ = LINE_PIX  // 4
 MESG_LINE_SZ = 0x20
+TEXT_LINE_SZ = 350 // 4
 
 # CG hight is 205 lines
 
@@ -28,6 +29,11 @@ def CGA_mode4_pallete_1(index: int) -> tuple[int, int, int]:
     return (0xAA * bool(index & 2) + GLOBAL_INTENSITY,
             0xAA * bool(index & 1) + GLOBAL_INTENSITY,
             0xAA + GLOBAL_INTENSITY)
+
+
+def MDA_pallete(index: int) -> tuple[int, int, int]:
+    index = index % 4
+    return (0xAA * bool(index & 2) + 0x55 * bool(index & 1),) * 3
 
 
 def draw_low_middle(call: bytes):
@@ -53,7 +59,23 @@ def draw_CG(call: bytes):
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for pixel_i, p in enumerate(pix_quad):
-            pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
+            try:
+                pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
+            except IndexError:
+                print(f"Error: draw to [{x+pixel_i}, {y}]")
+
+
+def draw_font(call: bytes):
+    for byte_i, byte in enumerate(call):
+        x = 4 * (byte_i % TEXT_LINE_SZ)
+        y = 2 * (byte_i // TEXT_LINE_SZ)
+        pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
+        pix_quad = (p & 3 for p in pix_quad)
+        for pixel_i, p in enumerate(pix_quad):
+            try:
+                pixels[x + pixel_i, y] = MDA_pallete(p)
+            except IndexError:
+                print(f"Error: draw to [{x+pixel_i}, {y}]")
 
 
 scroll_nom = sys.argv[1]
@@ -68,6 +90,10 @@ elif sys.argv[2] == "cg":
     image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 2))
     pixels = image.load()
     draw_CG(scroll)
+elif sys.argv[2] == "ft":
+    image = Image.new("RGB", (350, len(scroll) // TEXT_LINE_SZ + 12))
+    pixels = image.load()
+    draw_font(scroll)
 else:
     raise ValueError
 
