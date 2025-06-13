@@ -43,15 +43,15 @@ def draw_low_middle(call: bytes):
 
 
 def draw_CG(call: bytes):
-    for pli, byte in enumerate(call):
-        field_i = pli // FIELD_SZ
-        pli %= FIELD_SZ
-        x = pli % LINE_SZ
-        y = pli // LINE_SZ
+    for byte_i, byte in enumerate(call):
+        field_i = byte_i // FIELD_SZ
+        byte_i %= FIELD_SZ
+        x = byte_i % LINE_SZ
+        y = byte_i // LINE_SZ
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
-        for plj, p in enumerate(pix_quad):
-            pixels[4 * x + plj, 2 * y + field_i] = CGA_mode4_pallete_1(p)
+        for pixel_i, p in enumerate(pix_quad):
+            pixels[4 * x + pixel_i, 2 * y + field_i] = CGA_mode4_pallete_1(p)
 
 
 scroll_nom = sys.argv[1]
