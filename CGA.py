@@ -21,11 +21,6 @@ def CGA_pallete(index: int) -> tuple[int, int, int]:
             )
 
 
-def CGA_text_pallete(index: int) -> tuple[int, int, int]:
-    index = index % 2
-    return (0xFF * index,) * 3
-
-
 def CGA_mode4_pallete_1(index: int) -> tuple[int, int, int]:
     index = index % 4
     if index == 0:
@@ -85,7 +80,7 @@ def draw_1bit_font(call: bytes):
     for y, byte in enumerate(call):
         for x in range(8):
             try:
-                pixels[x, y] = CGA_text_pallete(byte >> (7 - x) & 1)
+                pixels[x, y] = byte >> (7 - x) & 1
             except IndexError:
                 print(f"Error: draw to [{x}, {y}]")
 
@@ -103,7 +98,7 @@ elif sys.argv[2] == "cg":
     pixels = image.load()
     draw_CG(scroll)
 elif sys.argv[2] == "ft":
-    image = Image.new("RGB", (8, len(scroll)))
+    image = Image.new("1", (8, len(scroll)))
     pixels = image.load()
     draw_1bit_font(scroll)
 else:
