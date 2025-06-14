@@ -30,12 +30,14 @@ def CGA_mode4_pallete_1(index: int) -> tuple[int, int, int]:
             0xAA + GLOBAL_INTENSITY)
 
 
-def MDA_pallete(index: int) -> tuple[int, int, int]:
+def MDA_pallete(index: int) -> int:
     index = index % 4
-    return (0xAA * bool(index & 2) + 0x55 * bool(index & 1),) * 3
+    return 0xAA * bool(index & 2) + 0x55 * bool(index & 1)
 
 
-def draw_low_middle(call: bytes):
+def draw_message(call: bytes) -> Image.Image:
+    image = Image.new("RGB", (4 * MESG_LINE_SZ, len(scroll) // MESG_LINE_SZ + 1))
+    pixels = image.load()
     y = 0
     while call:
         x = 0
@@ -47,9 +49,12 @@ def draw_low_middle(call: bytes):
             x += 4
         call = call[MESG_LINE_SZ:]
         y += 1
+    return image
 
 
-def draw_CG(call: bytes):
+def draw_CG(call: bytes) -> Image.Image:
+    image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 2))
+    pixels = image.load()
     for byte_i, byte in enumerate(call):
         field_i = byte_i // FIELD_SZ
         byte_i %= FIELD_SZ
@@ -62,9 +67,12 @@ def draw_CG(call: bytes):
                 pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
             except IndexError:
                 print(f"Error: draw to [{x+pixel_i}, {y}]")
+    return image
 
 
-def draw_2bit_font(call: bytes):
+def draw_2bit_font(call: bytes) -> Image.Image:
+    image = Image.new("L", (8, len(scroll) // 2))
+    pixels = image.load()
     for byte_i, byte in enumerate(call):
         x = 4 * (byte_i % 2)
         y = 2 * (byte_i // 2)
@@ -74,15 +82,19 @@ def draw_2bit_font(call: bytes):
                 pixels[x + pixel_i, y] = MDA_pallete(pixel)
             except IndexError:
                 print(f"Error: draw to [{x+pixel_i}, {y}]")
+    return image
 
 
-def draw_1bit_font(call: bytes):
+def draw_1bit_font(call: bytes) -> Image.Image:
+    image = Image.new("1", (8, len(scroll)))
+    pixels = image.load()
     for y, byte in enumerate(call):
         for x in range(8):
             try:
                 pixels[x, y] = byte >> (7 - x) & 1
             except IndexError:
                 print(f"Error: draw to [{x}, {y}]")
+    return image
 
 
 scroll_nom = sys.argv[1]
@@ -90,17 +102,11 @@ with open(scroll_nom, "rb") as file:
     scroll = file.read()
 
 if sys.argv[2] == "lm":
-    image = Image.new("RGB", (4 * MESG_LINE_SZ, len(scroll) // MESG_LINE_SZ + 1))
-    pixels = image.load()
-    draw_low_middle(scroll)
+    image = draw_message(scroll)
 elif sys.argv[2] == "cg":
-    image = Image.new("RGB", (LINE_PIX, len(scroll) // LINE_SZ + 2))
-    pixels = image.load()
-    draw_CG(scroll)
+    image = draw_CG(scroll)
 elif sys.argv[2] == "ft":
-    image = Image.new("1", (8, len(scroll)))
-    pixels = image.load()
-    draw_1bit_font(scroll)
+    image = draw_1bit_font(scroll)
 else:
     raise ValueError
 
