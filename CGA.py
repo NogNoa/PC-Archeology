@@ -73,11 +73,10 @@ def draw_2bit_font(call: bytes):
     for byte_i, byte in enumerate(call):
         x = 4 * (byte_i % 2)
         y = 2 * (byte_i // 2)
-        pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
-        pix_quad = (p & 3 for p in pix_quad)
-        for pixel_i, p in enumerate(pix_quad):
+        for pixel_i in range(4):
+            pixel = (byte >> 2 * pixel_i) & 3
             try:
-                pixels[x + pixel_i, y] = MDA_pallete(p)
+                pixels[x + pixel_i, y] = MDA_pallete(pixel)
             except IndexError:
                 print(f"Error: draw to [{x+pixel_i}, {y}]")
 
