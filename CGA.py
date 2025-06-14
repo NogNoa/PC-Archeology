@@ -86,12 +86,16 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 
 def draw_1bit_font(call: bytes) -> Image.Image:
-    image = Image.new("1", (8, len(scroll)))
+    image = Image.new("1", (0x100, len(scroll)// 0x20))
     pixels = image.load()
-    for y, byte in enumerate(call):
+    for byte_i, byte in enumerate(call):
+        letter_i = byte_i // 8
+        y = byte_i % 8
+        col = letter_i % 0x20
+        row = letter_i // 0x20
         for x in range(8):
             try:
-                pixels[x, y] = byte >> (7 - x) & 1
+                pixels[8 * col + x, 8 * row + y] = byte >> (7 - x) & 1
             except IndexError:
                 print(f"Error: draw to [{x}, {y}]")
     return image
