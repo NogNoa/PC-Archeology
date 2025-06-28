@@ -187,12 +187,21 @@ class SegDef(Subrecord):
 
 @dataclass
 class GroupComponentDescriptor:
-    desc_type: int
-    body: bytes
+    desc_type: int | DescriptorType
+    body: bytes | int
 
     @classmethod
-    def Create(cls, body: bytes):
-        return cls(body[0], body[1:]), b''
+    def Create(cls, val: bytes):
+        try:
+            desctype = DescriptorType(val[0])
+        except ValueError as err:
+            print(err)
+            desctype = val[0]
+        body = b''
+        if desctype == DescriptorType.SI:
+            body = val[1]
+            val = val[2:]
+        return cls(desctype, body), val
 
 
 @dataclass
@@ -254,7 +263,7 @@ class Record:
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body = NAME(length=val[0], body=val[1:])
             body.check()
-        elif rectype in {RecordType.LNAMES}:
+        elif rectype == RecordType.LNAMES:
             body = []
             while val:
                 length = val[0]
@@ -266,6 +275,8 @@ class Record:
             body = SegDef(module.seg_numb, val, module.lnames)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
+        elif rectype == RecordType.GRPDEF:
+            body = GroupDef(val, module.lnames)
         else:
             body = val
         return body
