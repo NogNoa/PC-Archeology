@@ -5,6 +5,12 @@ from typing import Self
 from pathlib import Path
 
 
+@dataclass
+class PhysicalAddress:
+    segment: int  # 16-bit
+    offset: int  # 16-bit
+
+
 class RecordType(Enum):
     THEADR = 0x80
     LHEADR = 0x82
@@ -26,7 +32,7 @@ class Subrecord:
 
 @dataclass
 class NAME(Subrecord):
-    length: int
+    length: int  # byte
     body: bytes
 
     def check(self):
@@ -34,7 +40,7 @@ class NAME(Subrecord):
 
 
 class NUMBER(Subrecord):
-    val: int
+    val: int  # 32-bit
 
     def __init__(self, body):
         assert len(body) == 4
@@ -46,7 +52,11 @@ class NUMBER(Subrecord):
     def __repr__(self):
         return repr(self.val)
 
-class StartAdress():
+
+class FIXUPP(Subrecord):
+
+    def __init__(self, *args):
+        pass
 
 
 @dataclass
@@ -54,22 +64,24 @@ class ModEnd(Subrecord):
     main: bool
     has_start_addrs: bool
     locateability: str
-    start_addr: StartAdress
+    start_addr: PhysicalAddress | FIXUPP
 
-    def __init__(self, body):
+    def __init__(self, body: bytes):
         mod_typ = body[0]
         self.is_logical = mod_typ & 1
         locateability = "logical" if self.is_logical & 1 else "physical"
-        mattr = body >> 6
+        mattr = mod_typ >> 6
         assert not (mod_typ & ((1 << 6) - 2))  # xx00000x
         self.main = mattr & 2
         self.has_start_addrs = mattr & 1
         if self.has_start_addrs:
-
-
-
-
-
+            if self.is_logical:
+                self.start_addr = FIXUPP(body[1:])
+            else:
+                assert len(body) == 5
+                segment = body[2] << 8 | body[1]
+                offset = body[4] << 8 | body[3]
+                self.start_addr = PhysicalAddress(segment, offset)
 
 
 @dataclass
@@ -103,6 +115,8 @@ class Record:
                 length = val[0]
                 body.append(NAME(length=length, body=val[1:length+1]))
                 val = val[length+1:]
+        elif rectype == RecordType.MOOEND:
+            body = ModEnd(val)
         else:
             body = val
         return body
