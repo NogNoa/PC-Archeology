@@ -4,11 +4,19 @@ from enum import Enum
 from typing import Self, Optional
 from pathlib import Path
 
+BIG_SEGMENT = 0x1000
 
 @dataclass
 class PhysicalAddress:
     segment: int  # 16-bit
     offset: int  # 16-bit
+
+
+@dataclass
+class LogicalAddress:
+    ltl_dat: int  # byte
+    max_length: int  # 16-bit
+    group_offset: int  # 16-bit
 
 
 class RecordType(Enum):
@@ -87,6 +95,67 @@ class ModEnd(Subrecord):
 
 
 @dataclass
+class Attr(Subrecord):
+    locateability: str
+    alignment: str
+    is_physical: bool
+    named: bool
+    combination: int
+    in_group: bool
+    subbody: PhysicalAddress | LogicalAddress
+
+    @classmethod
+    def Create(cls, body):
+        acbp = body[0]
+        a = acbp >> 5
+        c = (acbp >> 2) & 7
+        b = acbp & 2
+        p = acbp & 1
+        assert a != 7
+        is_physical = a in {0, 5}
+        locateability = "absolute" if is_physical else "load-time locateable" if a == 6 else "relocateable"
+        alignment = "byte" if a == 1 else "word" if a == 2 else "paragraph" if a in {3, 6} else "page" if a == 4 else \
+            "unknown"
+        named = a != 5
+        bsm = p & 1
+        in_group = p == 0x80
+        assert not p & 0b1111110
+        if is_physical:
+            assert c == 0
+            subbody = PhysicalAddress(body[2] << 8 | body[1],body[3])
+            rest = body[4:]
+        elif a == 6:
+            subbody = LogicalAddress(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
+            rest = body[6:]
+        else:
+            subbody = b''
+            rest = body[1:]
+        if isinstance(subbody, LogicalAddress) and bsm:
+            assert subbody.max_length == 0
+            subbody.max_length = BIG_SEGMENT
+        back = Attr(locateability, alignment, is_physical, named, c, in_group, subbody)
+        back.b = b
+        return back, rest
+
+
+@dataclass
+class SegDef(Subrecord):
+    index: int  # 31-bit
+    seg_attr: Attr
+    length: int
+    
+    def __init__(self, index, body: bytes):
+        self.index = index
+        self.seg_attr, body = Attr.Create(body)
+        self.length = body[1] << 8 | body[2]
+        body = body[3:]
+        # noinspection PyUnresolvedReferences
+        if self.seg_attr.b:
+            assert self.length == 0
+            self.length = BIG_SEGMENT
+
+
+@dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
@@ -102,14 +171,16 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        body = cls.body_parse(rectype, val[3:])
+        body = val[3:-1]
+        body = cls.body_parse(rectype, body)
         assert sum(val) % 0x100 == 0
         return cls(rectype, '%x' % rectype.value , length, body), rest
 
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes):
+        global seg_numb
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
-            body = NAME(length=val[0], body=val[1:-1])
+            body = NAME(length=val[0], body=val[1:])
             body.check()
         elif rectype in {RecordType.LNAMES}:
             body = []
@@ -119,6 +190,9 @@ class Record:
                 val = val[length+1:]
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
+        elif rectype == RecordType.SEGDEF:
+            seg_numb += 1
+            body = SegDef(seg_numb, val)
         else:
             body = val
         return body
@@ -127,6 +201,7 @@ class Record:
 module: list[Record] = []
 scroll_path = Path(sys.argv[1])
 codex_path = Path(scroll_path.with_suffix('.record'))
+seg_numb = 0
 with open(scroll_path, "rb") as file:
     scroll = file.read()
 if 'scroll' not in locals() or not scroll:
