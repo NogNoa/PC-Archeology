@@ -182,6 +182,24 @@ class SegDef(Subrecord):
 
 
 @dataclass
+class Comment(Subrecord):
+    com_class: int  # byte
+    is_purgable: bool
+    to_list: bool
+    class_is_reserverd: bool
+    body: bytes
+
+    def __init__(self, body: bytes):
+        head = body[0]
+        assert not head & (0x40 - 1)
+        self.is_purgable = not (head & 0x80)
+        self.to_list = not (head & 0x40)
+        self.com_class = body[1]
+        self.class_is_reserverd = not (self.com_class & 0x80)
+        self.body = body[2:]
+
+
+@dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
@@ -219,6 +237,8 @@ class Record:
         elif rectype == RecordType.SEGDEF:
             module.seg_numb += 1
             body = SegDef(module.seg_numb, val, module.lnames)
+        elif rectype == RecordType.COMMENT:
+            body = Comment(val)
         else:
             body = val
         return body
