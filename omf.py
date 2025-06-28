@@ -115,7 +115,7 @@ class Attr(Subrecord):
     is_physical: bool
     named: bool
     combination: int
-    page_resient: bool
+    page_resident: bool
     child: PhysicalAddress | LoadTimeLocateable
 
     @classmethod
@@ -157,11 +157,11 @@ class SegDef(Subrecord):
     Overlay_name: Optional[str]
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, index, body: bytes, lnames: list[str] = ()):
+    def __init__(self, index, body: bytes, lnames: tuple[str] = ()):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
-        self.length = body[1] << 8 | body[2]
-        body = body[3:]
+        self.length = body[0] << 8 | body[1]
+        body = body[2:]
         try:
             self.seg_attr.big
         except AttributeError:
@@ -175,7 +175,7 @@ class SegDef(Subrecord):
         if self.seg_attr.named and lnames:
             defnames = []
             for _ in range(3):
-                name_index, body = body[1] << 8 | body[0], body[2:]
+                name_index, body = body[0] - 1, body[1:]
                 defnames.append(lnames[name_index])
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
@@ -215,11 +215,12 @@ class Record:
                 length = val[0]
                 body.append(NAME(length=length, body=val[1:length+1]))
                 val = val[length+1:]
+            lnames = tuple(n.body for n in body)
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
             seg_numb += 1
-            body = SegDef(seg_numb, val)
+            body = SegDef(seg_numb, val, lnames)
         else:
             body = val
         return body
