@@ -1,7 +1,7 @@
 import sys
 from dataclasses import dataclass
 from enum import Enum
-from typing import Self
+from typing import Self, Optional
 from pathlib import Path
 
 
@@ -62,18 +62,17 @@ class FIXUPP(Subrecord):
 @dataclass
 class ModEnd(Subrecord):
     main: bool
-    has_start_addrs: bool
     locateability: str
-    start_addr: PhysicalAddress | FIXUPP
+    start_addr: Optional[PhysicalAddress | FIXUPP]
 
     def __init__(self, body: bytes):
         mod_typ = body[0]
         self.is_logical = mod_typ & 1
-        locateability = "logical" if self.is_logical & 1 else "physical"
+        self.locateability = "logical" if self.is_logical & 1 else "physical"
         mattr = mod_typ >> 6
         assert not (mod_typ & ((1 << 6) - 2))  # xx00000x
-        self.main = mattr & 2
-        self.has_start_addrs = mattr & 1
+        self.main = bool(mattr & 2)
+        self.has_start_addrs = bool(mattr & 1)
         if self.has_start_addrs:
             if self.is_logical:
                 self.start_addr = FIXUPP(body[1:])
@@ -82,6 +81,9 @@ class ModEnd(Subrecord):
                 segment = body[2] << 8 | body[1]
                 offset = body[4] << 8 | body[3]
                 self.start_addr = PhysicalAddress(segment, offset)
+        else:
+            self.start_addr = None
+            self.locateability = "N/A"
 
 
 @dataclass
@@ -100,14 +102,14 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        body = cls.body_parse(rectype, val)
+        body = cls.body_parse(rectype, val[3:])
         assert sum(val) % 0x100 == 0
         return cls(rectype, '%x' % rectype.value , length, body), rest
 
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes):
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
-            body = NAME(length=val[3], body=val[4:-1])
+            body = NAME(length=val[0], body=val[1:-1])
             body.check()
         elif rectype in {RecordType.LNAMES}:
             body = []
