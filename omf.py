@@ -157,10 +157,10 @@ class SegDef(Subrecord):
     Overlay_name: Optional[str]
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, index, body: bytes, lnames: tuple[str] = ()):
+    def __init__(self, index, body: bytes, lnames: tuple[str, ...] = ()):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
-        self.length = body[0] << 8 | body[1]
+        self.length = body[1] << 8 | body[0]
         body = body[2:]
         try:
             self.seg_attr.big
@@ -169,7 +169,6 @@ class SegDef(Subrecord):
         if self.seg_attr.big:
             assert self.length == 0
             self.length = BIG_SEGMENT
-        del self.seg_attr.big
         if isinstance(self.seg_attr.child, LoadTimeLocateable):
             assert self.length <= self.seg_attr.child.max_length
         if self.seg_attr.named and lnames:
@@ -190,7 +189,7 @@ class Record:
     body: bytes | Subrecord | list[Subrecord]
 
     @classmethod
-    def create(cls, val: bytes) -> tuple[Self, bytes]:
+    def create(cls, parent, val: bytes) -> tuple[Self, bytes]:
         try:
             rectype = RecordType(val[0])
         except ValueError as err:
@@ -199,13 +198,12 @@ class Record:
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
         body = val[3:-1]
-        body = cls.body_parse(rectype, body)
+        body = cls.body_parse(rectype, body, parent)
         assert sum(val) % 0x100 == 0
         return cls(rectype, '%x' % rectype.value , length, body), rest
 
     @staticmethod
-    def body_parse(rectype: RecordType, val: bytes):
-        global seg_numb, lnames
+    def body_parse(rectype: RecordType, val: bytes, module) -> list[Subrecord]:
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body = NAME(length=val[0], body=val[1:])
             body.check()
@@ -215,18 +213,31 @@ class Record:
                 length = val[0]
                 body.append(NAME(length=length, body=val[1:length+1]))
                 val = val[length+1:]
-            lnames = tuple(n.body for n in body)
+            module.lnames = tuple(n.body for n in body)
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
-            seg_numb += 1
-            body = SegDef(seg_numb, val, lnames)
+            module.seg_numb += 1
+            body = SegDef(module.seg_numb, val, module.lnames)
         else:
             body = val
         return body
 
 
-module: list[Record] = []
+class Module:
+    def __init__(self, body: bytes):
+        val: list[Record] = []
+        self.seg_numb = 0
+        self.lnames : tuple[str, ...] = ()
+        while body:
+            rec, body = Record.create(self, body)
+            val.append(rec)
+        self.val = tuple(val)
+
+    def __call__(self) -> tuple[Record, ...]:
+        return self.val
+
+
 scroll_path = Path(sys.argv[1])
 codex_path = Path(scroll_path.with_suffix('.record'))
 seg_numb = 0
@@ -237,9 +248,7 @@ if 'scroll' not in locals() or not scroll:
     # pycharm complained that scroll may not initialize
     # but I don't think this is possible.
     print(scroll_path.name, "not found", file=sys.stderr)
-while scroll:
-    rec, scroll = Record.create(scroll)
-    module.append(rec)
+module = Module(scroll)
 with open(codex_path, "w") as file:
-    file.writelines((str(m).replace(', ', ',\t') + '\n' for m in module))
+    file.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
 
