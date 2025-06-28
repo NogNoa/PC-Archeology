@@ -152,12 +152,12 @@ class SegDef(Subrecord):
     index: int  # 31-bit
     seg_attr: Attr
     length: int
-    seg_name: Optional[str]
-    class_name: Optional[str]
-    Overlay_name: Optional[str]
+    seg_name: str
+    class_name: str
+    Overlay_name: str
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, index, body: bytes, lnames: tuple[str, ...] = ()):
+    def __init__(self, index, body: bytes, lnames: tuple[str, ...]):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
         self.length = body[1] << 8 | body[0]
@@ -171,7 +171,7 @@ class SegDef(Subrecord):
             self.length = BIG_SEGMENT
         if isinstance(self.seg_attr.child, LoadTimeLocateable):
             assert self.length <= self.seg_attr.child.max_length
-        if self.seg_attr.named and lnames:
+        if self.seg_attr.named:
             defnames = []
             for _ in range(3):
                 name_index, body = body[0] - 1, body[1:]
@@ -179,6 +179,27 @@ class SegDef(Subrecord):
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
             self.seg_name, self.class_name, self.Overlay_name = ('',) * 3
+
+
+@dataclass
+class GroupComponentDescriptor:
+    desc_type: int
+    body: bytes
+
+
+@dataclass
+class GroupDef(Subrecord):
+    name: str
+    descriptors: list[GroupComponentDescriptor]
+
+    def __init__(self, body: bytes, lnames: tuple[str, ...]):
+        name_index = body[0] - 1
+        self.name = lnames[name_index]
+        body = body[1:]
+        self.descriptors = []
+        while body:
+            descriptor, body = GroupComponentDescriptor.Create(body)
+            self.descriptors.append(descriptor)
 
 
 @dataclass
