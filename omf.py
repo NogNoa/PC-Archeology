@@ -20,9 +20,8 @@ class RecordType(Enum):
     LEDATA = 0xA0
 
 
-@dataclass
 class Subrecord:
-    body: bytes
+    pass
 
 
 @dataclass
@@ -41,13 +40,44 @@ class NUMBER(Subrecord):
         assert len(body) == 4
         self.val = body[3] << 0x18 | body[2] << 0x10 | body[1] << 8 | body[0]
 
+    def __str__(self):
+        return str(self.val)
+
+    def __repr__(self):
+        return repr(self.val)
+
+class StartAdress():
+
+
+@dataclass
+class ModEnd(Subrecord):
+    main: bool
+    has_start_addrs: bool
+    locateability: str
+    start_addr: StartAdress
+
+    def __init__(self, body):
+        mod_typ = body[0]
+        self.is_logical = mod_typ & 1
+        locateability = "logical" if self.is_logical & 1 else "physical"
+        mattr = body >> 6
+        assert not (mod_typ & ((1 << 6) - 2))  # xx00000x
+        self.main = mattr & 2
+        self.has_start_addrs = mattr & 1
+        if self.has_start_addrs:
+
+
+
+
+
+
 
 @dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
     length: int  # 16-bit
-    body: Subrecord | list[Subrecord]
+    body: bytes | Subrecord | list[Subrecord]
 
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
@@ -58,6 +88,12 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
+        body = cls.body_parse(rectype, val)
+        assert sum(val) % 0x100 == 0
+        return cls(rectype, '%x' % rectype.value , length, body), rest
+
+    @staticmethod
+    def body_parse(rectype: RecordType, val: bytes):
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body = NAME(length=val[3], body=val[4:-1])
             body.check()
@@ -68,9 +104,8 @@ class Record:
                 body.append(NAME(length=length, body=val[1:length+1]))
                 val = val[length+1:]
         else:
-            body = Subrecord(val)
-        assert sum(val) % 0x100 == 0
-        return cls(rectype, '%x' % rectype.value , length, body), rest
+            body = val
+        return body
 
 
 module: list[Record] = []
