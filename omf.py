@@ -24,9 +24,28 @@ class Subrecord:
     body: bytes
 
 
+@dataclass
 class NAME(Subrecord):
     length: int
     body: bytes
+
+    def check(self):
+        assert len(self.body) == self.length
+
+
+class NUMBER(Subrecord):
+    val: int
+
+    def __init__(self, body):
+        assert len(body) == 4
+        self.val = body[3] << 0x18 | body[2] << 0x10 | body[1] << 8 | body[0]
+
+class REPEAT(Subrecord):
+    val: bytes
+    repeat: int
+
+    def __init__(self, body):
+
 
 @dataclass
 class Record:
@@ -43,7 +62,7 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        body = Subrecord(val[3:-1])
+        body = NAME(length=val[3], body=val[4:-1])
         assert sum(val) % 0x100 == 0
         return cls(rectype, length, body), rest
 
@@ -53,7 +72,7 @@ scroll_path = Path(sys.argv[1])
 codex_path = Path(scroll_path.with_suffix('.record'))
 with open(scroll_path, "rb") as file:
     scroll = file.read()
-if scroll not in locals() or not scroll:
+if 'scroll' not in locals() or not scroll:
     # pycharm complained that scroll may not initialize
     # but I don't think this is possible.
     print(scroll_path.name, "not found", file=sys.stderr)
