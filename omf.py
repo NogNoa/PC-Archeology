@@ -40,12 +40,6 @@ class NUMBER(Subrecord):
         assert len(body) == 4
         self.val = body[3] << 0x18 | body[2] << 0x10 | body[1] << 8 | body[0]
 
-class REPEAT(Subrecord):
-    val: bytes
-    repeat: int
-
-    def __init__(self, body):
-
 
 @dataclass
 class Record:
@@ -62,7 +56,10 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        body = NAME(length=val[3], body=val[4:-1])
+        if rectype in {RecordType.THEADR}:
+            body = NAME(length=val[3], body=val[4:-1])
+        else:
+            body = Subrecord(val)
         assert sum(val) % 0x100 == 0
         return cls(rectype, length, body), rest
 
