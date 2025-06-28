@@ -5,8 +5,17 @@ from typing import Self
 
 
 class RecordType(Enum):
-    COMMENT = 0x88
     THEADR = 0x80
+    MOOEND = 0x8A
+    EXTDEF = 0x8C
+    COMMENT = 0x88
+    PUBDEF = 0x90
+    LINNUM = 0x94
+    LNAMES = 0x96
+    SEGDEF = 0x98
+    GRPDEF = 0x9A
+    FIXUPP = 0x9C
+    LEDATA = 0xA0
 
 
 @dataclass
@@ -32,10 +41,10 @@ class Record:
 module: list[Record] = []
 with open(sys.argv[1], "rb") as file:
     scroll = file.read()
-    if scroll not in locals() or not scroll:
-        # pycharm complained that scroll may not initialize
-        # but I don't think this is possible.
-        print(file, "not found", file=sys.stderr)
+if scroll not in locals() or not scroll:
+    # pycharm complained that scroll may not initialize
+    # but I don't think this is possible.
+    print(sys.argv[1], "not found", file=sys.stderr)
 while scroll:
     rec, scroll = Record.create(scroll)
     module.append(rec)
