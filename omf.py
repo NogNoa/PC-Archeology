@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Self
 from pathlib import Path
 
+
 class RecordType(Enum):
     THEADR = 0x80
     MOOEND = 0x8A
@@ -19,10 +20,19 @@ class RecordType(Enum):
 
 
 @dataclass
+class Subrecord:
+    body: bytes
+
+
+class NAME(Subrecord):
+    length: int
+    body: bytes
+
+@dataclass
 class Record:
     rectype: RecordType | int  # byte
     length: int  # 16-bit
-    body: bytes
+    body: Subrecord
 
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
@@ -33,7 +43,7 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        body = val[3:-1]
+        body = Subrecord(val[3:-1])
         assert sum(val) % 0x100 == 0
         return cls(rectype, length, body), rest
 
