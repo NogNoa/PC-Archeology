@@ -252,11 +252,9 @@ class Record:
                 length = val[0]
                 body.append(NAME(length=length, body=val[1:length+1]))
                 val = val[length+1:]
-            module.lnames = tuple(n.body for n in body)
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
-            module.seg_numb += 1
             body = SegDef(module.seg_numb, val, module.lnames)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
@@ -268,11 +266,16 @@ class Record:
 class Module:
     def __init__(self, body: bytes):
         val: list[Record] = []
-        self.seg_numb = 0
+        self.seg_numb = 1
         self.lnames : tuple[str, ...] = ()
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
+            if rec.rectype == RecordType.LNAMES:
+                self.lnames = tuple(n.body for n in rec.body)
+            elif rec.rectype == RecordType.SEGDEF:
+                self.seg_numb += 1
+        self.seg_numb -= 1
         self.val = tuple(val)
 
     def __call__(self) -> tuple[Record, ...]:
