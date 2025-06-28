@@ -2,7 +2,7 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from typing import Self
-
+from pathlib import Path
 
 class RecordType(Enum):
     THEADR = 0x80
@@ -39,14 +39,17 @@ class Record:
 
 
 module: list[Record] = []
-with open(sys.argv[1], "rb") as file:
+scroll_path = Path(sys.argv[1])
+codex_path = Path(scroll_path.with_suffix('.record'))
+with open(scroll_path, "rb") as file:
     scroll = file.read()
 if scroll not in locals() or not scroll:
     # pycharm complained that scroll may not initialize
     # but I don't think this is possible.
-    print(sys.argv[1], "not found", file=sys.stderr)
+    print(scroll_path.name, "not found", file=sys.stderr)
 while scroll:
     rec, scroll = Record.create(scroll)
     module.append(rec)
-print(*module, sep='\n')
+with open(codex_path, "w") as file:
+    file.writelines((str(m).replace(', ', ',\t') + '\n' for m in module))
 
