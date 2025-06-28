@@ -7,6 +7,7 @@ from pathlib import Path
 
 class RecordType(Enum):
     THEADR = 0x80
+    LHEADR = 0x82
     MOOEND = 0x8A
     EXTDEF = 0x8C
     COMMENT = 0x88
@@ -43,9 +44,10 @@ class NUMBER(Subrecord):
 
 @dataclass
 class Record:
-    rectype: RecordType | int  # byte
+    rectype: RecordType | int   # byte
+    typehex: str
     length: int  # 16-bit
-    body: Subrecord
+    body: Subrecord | list[Subrecord]
 
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
@@ -56,12 +58,19 @@ class Record:
             rectype = val[0]
         length = val[2] << 8 | val[1]
         val, rest = val[:length+3], val[length+3:]
-        if rectype in {RecordType.THEADR}:
+        if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body = NAME(length=val[3], body=val[4:-1])
+            body.check()
+        elif rectype in {RecordType.LNAMES}:
+            body = []
+            while val:
+                length = val[0]
+                body.append(NAME(length=length, body=val[1:length+1]))
+                val = val[length+1:]
         else:
             body = Subrecord(val)
         assert sum(val) % 0x100 == 0
-        return cls(rectype, length, body), rest
+        return cls(rectype, '%x' % rectype.value , length, body), rest
 
 
 module: list[Record] = []
