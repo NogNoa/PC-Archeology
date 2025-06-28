@@ -6,6 +6,7 @@ from pathlib import Path
 
 BIG_SEGMENT = 0x1000
 
+
 @dataclass
 class PhysicalAddress:
     segment: int  # 16-bit
@@ -26,10 +27,10 @@ class LoadTimeLocateable:
         if bsm:
             assert max_length == 0
             max_length = BIG_SEGMENT
+        assert self.in_group or group_offset == 0
         self.ltl_dat = ltl_dat
         self.max_length = max_length
         self.group_offset = group_offset
-
 
 
 class RecordType(Enum):
@@ -115,7 +116,7 @@ class Attr(Subrecord):
     named: bool
     combination: int
     page_resient: bool
-    subbody: PhysicalAddress | LoadTimeLocateable
+    child: PhysicalAddress | LoadTimeLocateable
 
     @classmethod
     def Create(cls, body):
@@ -127,12 +128,13 @@ class Attr(Subrecord):
         assert align_type != 7
         is_physical = align_type in {0, 5}
         locateability = "absolute" if is_physical else "load-time locateable" if align_type == 6 else "relocateable"
-        alignment = "byte" if align_type == 1 else "word" if align_type == 2 else "paragraph" if align_type in {3, 6} else "page" if align_type == 4 else \
+        alignment = "byte" if align_type == 1 else "word" if align_type == 2 else \
+            "paragraph" if align_type in {3, 6} else "page" if align_type == 4 else \
             "unknown"
         named = align_type != 5
         if is_physical:
             assert combination == 0
-            subbody = PhysicalAddress(body[2] << 8 | body[1],body[3])
+            subbody = PhysicalAddress(body[2] << 8 | body[1], body[3])
             rest = body[4:]
         elif align_type == 6:
             subbody = LoadTimeLocateable(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
@@ -150,9 +152,12 @@ class SegDef(Subrecord):
     index: int  # 31-bit
     seg_attr: Attr
     length: int
+    seg_name: Optional[str]
+    class_name: Optional[str]
+    Overlay_name: Optional[str]
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, index, body: bytes):
+    def __init__(self, index, body: bytes, lnames: list[str] = ()):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
         self.length = body[1] << 8 | body[2]
@@ -165,6 +170,16 @@ class SegDef(Subrecord):
             assert self.length == 0
             self.length = BIG_SEGMENT
         del self.seg_attr.big
+        if isinstance(self.seg_attr.child, LoadTimeLocateable):
+            assert self.length <= self.seg_attr.child.max_length
+        if self.seg_attr.named and lnames:
+            defnames = []
+            for _ in range(3):
+                name_index, body = body[1] << 8 | body[0], body[2:]
+                defnames.append(lnames[name_index])
+            self.seg_name, self.class_name, self.Overlay_name = defnames
+        else:
+            self.seg_name, self.class_name, self.Overlay_name = ('',) * 3
 
 
 @dataclass
@@ -190,7 +205,7 @@ class Record:
 
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes):
-        global seg_numb
+        global seg_numb, lnames
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body = NAME(length=val[0], body=val[1:])
             body.check()
@@ -214,6 +229,7 @@ module: list[Record] = []
 scroll_path = Path(sys.argv[1])
 codex_path = Path(scroll_path.with_suffix('.record'))
 seg_numb = 0
+lnames = []
 with open(scroll_path, "rb") as file:
     scroll = file.read()
 if 'scroll' not in locals() or not scroll:
