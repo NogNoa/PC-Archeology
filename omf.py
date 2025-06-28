@@ -14,7 +14,7 @@ class PhysicalAddress:
 
 
 @dataclass
-class LoadTimeLocateable:
+class LoadtimeLocateable:
     ltl_dat: int  # byte
     in_group: bool
     max_length: int  # 16-bit
@@ -46,6 +46,10 @@ class RecordType(Enum):
     GRPDEF = 0x9A
     FIXUPP = 0x9C
     LEDATA = 0xA0
+
+
+class DescriptorType(Enum):
+    SI = 0xFF
 
 
 class Subrecord:
@@ -116,7 +120,7 @@ class Attr(Subrecord):
     named: bool
     combination: int
     page_resident: bool
-    child: PhysicalAddress | LoadTimeLocateable
+    child: PhysicalAddress | LoadtimeLocateable
 
     @classmethod
     def Create(cls, body):
@@ -137,7 +141,7 @@ class Attr(Subrecord):
             subbody = PhysicalAddress(body[2] << 8 | body[1], body[3])
             rest = body[4:]
         elif align_type == 6:
-            subbody = LoadTimeLocateable(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
+            subbody = LoadtimeLocateable(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
             rest = body[6:]
         else:
             subbody = b''
@@ -169,7 +173,7 @@ class SegDef(Subrecord):
         if self.seg_attr.big:
             assert self.length == 0
             self.length = BIG_SEGMENT
-        if isinstance(self.seg_attr.child, LoadTimeLocateable):
+        if isinstance(self.seg_attr.child, LoadtimeLocateable):
             assert self.length <= self.seg_attr.child.max_length
         if self.seg_attr.named:
             defnames = []
@@ -185,6 +189,10 @@ class SegDef(Subrecord):
 class GroupComponentDescriptor:
     desc_type: int
     body: bytes
+
+    @classmethod
+    def Create(cls, body: bytes):
+        return cls(body[0], body[1:]), b''
 
 
 @dataclass
