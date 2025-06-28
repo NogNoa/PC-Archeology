@@ -13,10 +13,23 @@ class PhysicalAddress:
 
 
 @dataclass
-class LogicalAddress:
+class LoadTimeLocateable:
     ltl_dat: int  # byte
+    in_group: bool
     max_length: int  # 16-bit
     group_offset: int  # 16-bit
+
+    def __init__(self, ltl_dat: int, max_length: int, group_offset: int):
+        bsm = ltl_dat & 1
+        self.in_group = ltl_dat == 0x80
+        assert not ltl_dat & 0b1111110
+        if bsm:
+            assert max_length == 0
+            max_length = BIG_SEGMENT
+        self.ltl_dat = ltl_dat
+        self.max_length = max_length
+        self.group_offset = group_offset
+
 
 
 class RecordType(Enum):
@@ -101,40 +114,34 @@ class Attr(Subrecord):
     is_physical: bool
     named: bool
     combination: int
-    in_group: bool
-    subbody: PhysicalAddress | LogicalAddress
+    page_resient: bool
+    subbody: PhysicalAddress | LoadTimeLocateable
 
     @classmethod
     def Create(cls, body):
         acbp = body[0]
-        a = acbp >> 5
-        c = (acbp >> 2) & 7
-        b = acbp & 2
-        p = acbp & 1
-        assert a != 7
-        is_physical = a in {0, 5}
-        locateability = "absolute" if is_physical else "load-time locateable" if a == 6 else "relocateable"
-        alignment = "byte" if a == 1 else "word" if a == 2 else "paragraph" if a in {3, 6} else "page" if a == 4 else \
+        align_type = acbp >> 5
+        combination = (acbp >> 2) & 7
+        big = acbp & 2
+        page_resident = bool(acbp & 1)
+        assert align_type != 7
+        is_physical = align_type in {0, 5}
+        locateability = "absolute" if is_physical else "load-time locateable" if align_type == 6 else "relocateable"
+        alignment = "byte" if align_type == 1 else "word" if align_type == 2 else "paragraph" if align_type in {3, 6} else "page" if align_type == 4 else \
             "unknown"
-        named = a != 5
-        bsm = p & 1
-        in_group = p == 0x80
-        assert not p & 0b1111110
+        named = align_type != 5
         if is_physical:
-            assert c == 0
+            assert combination == 0
             subbody = PhysicalAddress(body[2] << 8 | body[1],body[3])
             rest = body[4:]
-        elif a == 6:
-            subbody = LogicalAddress(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
+        elif align_type == 6:
+            subbody = LoadTimeLocateable(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
             rest = body[6:]
         else:
             subbody = b''
             rest = body[1:]
-        if isinstance(subbody, LogicalAddress) and bsm:
-            assert subbody.max_length == 0
-            subbody.max_length = BIG_SEGMENT
-        back = Attr(locateability, alignment, is_physical, named, c, in_group, subbody)
-        back.b = b
+        back = Attr(locateability, alignment, is_physical, named, combination, page_resident, subbody)
+        back.big = big
         return back, rest
 
 
@@ -143,16 +150,21 @@ class SegDef(Subrecord):
     index: int  # 31-bit
     seg_attr: Attr
     length: int
-    
+
+    # noinspection PyUnresolvedReferences
     def __init__(self, index, body: bytes):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
         self.length = body[1] << 8 | body[2]
         body = body[3:]
-        # noinspection PyUnresolvedReferences
-        if self.seg_attr.b:
+        try:
+            self.seg_attr.big
+        except AttributeError:
+            return
+        if self.seg_attr.big:
             assert self.length == 0
             self.length = BIG_SEGMENT
+        del self.seg_attr.big
 
 
 @dataclass
