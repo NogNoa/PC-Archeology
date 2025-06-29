@@ -122,10 +122,12 @@ class External(Subrecord):
     ext_index: int
 
     @classmethod
-    def create(cls, val: bytes, index: int):
+    def create(cls, val: bytes, module: "Module") -> tuple[Self, bytes]:
         name, val = NAME.create(val)
         obj_type = val[0]
-        ext_index = index
+        ext_index = module.ext_numb
+        if obj_type and module.typedefs:
+            obj_type = module.typedefs[obj_type]
         return cls(name, obj_type, ext_index), val[1:]
 
 
@@ -210,7 +212,7 @@ class SegDef(Subrecord):
             self.length = BIG_SEGMENT
         if isinstance(self.seg_attr.child, LoadtimeLocateable):
             assert self.length <= self.seg_attr.child.max_length
-        if self.seg_attr.named:
+        if self.seg_attr.named and lnames:
             defnames = []
             for _ in range(3):
                 name_index, body = body[0] - 1, body[1:]
@@ -244,9 +246,12 @@ class GroupDef(Subrecord):
     name: str
     descriptors: list[GroupComponentDescriptor]
 
-    def __init__(self, body: bytes, lnames: tuple[str, ...]):
-        name_index = body[0] - 1
-        self.name = lnames[name_index]
+    def __init__(self, body: bytes, lnames: tuple[str, ...] = ()):
+        name_index = body[0]
+        if name_index and lnames:
+            self.name = lnames[name_index - 1]
+        else:
+            self.name = ''
         body = body[1:]
         self.descriptors = []
         while body:
@@ -300,7 +305,7 @@ class Record:
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
-                external, val = External.create(val, module.ext_numb)
+                external, val = External.create(val, module)
                 body.append(external)
         else:
             body = val
@@ -313,6 +318,7 @@ class Module:
         self.seg_numb = 1
         self.ext_numb = 1
         self.lnames : tuple[str, ...] = ()
+        self.typedefs: tuple[str, ...] = ()
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
