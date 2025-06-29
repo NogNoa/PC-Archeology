@@ -62,8 +62,10 @@ class NAME(Subrecord):
     length: int  # byte
     body: bytes
 
-    def check(self):
-        assert len(self.body) == self.length
+    @classmethod
+    def create(cls, val: bytes) -> tuple[Self, bytes]:
+        length = val[0]
+        return cls(length, val[1:length + 1]), val[length + 1:]
 
 
 class NUMBER(Subrecord):
@@ -121,11 +123,10 @@ class External(Subrecord):
 
     @classmethod
     def create(cls, val: bytes, index: int):
-        length = val[0]
-        name = NAME(length, val[1:length + 1])
-        obj_type = val[length + 1]
+        name, val = NAME.create(val)
+        obj_type = val[0]
         ext_index = index
-        return cls(name, obj_type, ext_index), val[length + 2:]
+        return cls(name, obj_type, ext_index), val[1:]
 
 
 @dataclass
@@ -281,14 +282,13 @@ class Record:
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes, module) -> list[Subrecord]:
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
-            body = NAME(length=val[0], body=val[1:])
-            body.check()
+            body, remainder = NAME.create(val)
+            assert not remainder
         elif rectype == RecordType.LNAMES:
             body = []
             while val:
-                length = val[0]
-                body.append(NAME(length=length, body=val[1:length+1]))
-                val = val[length+1:]
+                name, val = NAME.create(val)
+                body.append(name)
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
