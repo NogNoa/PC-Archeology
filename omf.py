@@ -46,6 +46,7 @@ class RecordType(Enum):
     GRPDEF = 0x9A
     FIXUPP = 0x9C
     LEDATA = 0xA0
+    LIDATA = 0xA2
 
 
 class DescriptorType(Enum):
@@ -79,7 +80,7 @@ class NUMBER(Subrecord):
         return repr(self.val)
 
 
-class FIXUPP(Subrecord):
+class Fixupp(Subrecord):
 
     def __init__(self, *args):
         pass
@@ -89,7 +90,7 @@ class FIXUPP(Subrecord):
 class ModEnd(Subrecord):
     main: bool
     locateability: str
-    start_addr: Optional[PhysicalAddress | FIXUPP]
+    start_addr: Optional[PhysicalAddress | Fixupp]
 
     def __init__(self, body: bytes):
         mod_typ = body[0]
@@ -101,7 +102,7 @@ class ModEnd(Subrecord):
         self.has_start_addrs = bool(mattr & 1)
         if self.has_start_addrs:
             if self.is_logical:
-                self.start_addr = FIXUPP(body[1:])
+                self.start_addr = Fixupp(body[1:])
             else:
                 assert len(body) == 5
                 segment = body[2] << 8 | body[1]
@@ -110,6 +111,30 @@ class ModEnd(Subrecord):
         else:
             self.start_addr = None
             self.locateability = "N/A"
+
+
+@dataclass
+class External(Subrecord):
+    name: str
+    obj_type: str
+
+
+@dataclass
+class Comment(Subrecord):
+    com_class: int  # byte
+    is_purgable: bool
+    to_list: bool
+    class_is_reserverd: bool
+    body: bytes
+
+    def __init__(self, body: bytes):
+        head = body[0]
+        assert not head & (0x40 - 1)
+        self.is_purgable = not (head & 0x80)
+        self.to_list = not (head & 0x40)
+        self.com_class = body[1]
+        self.class_is_reserverd = not (self.com_class & 0x80)
+        self.body = body[2:]
 
 
 @dataclass
@@ -220,24 +245,6 @@ class GroupDef(Subrecord):
 
 
 @dataclass
-class Comment(Subrecord):
-    com_class: int  # byte
-    is_purgable: bool
-    to_list: bool
-    class_is_reserverd: bool
-    body: bytes
-
-    def __init__(self, body: bytes):
-        head = body[0]
-        assert not head & (0x40 - 1)
-        self.is_purgable = not (head & 0x80)
-        self.to_list = not (head & 0x40)
-        self.com_class = body[1]
-        self.class_is_reserverd = not (self.com_class & 0x80)
-        self.body = body[2:]
-
-
-@dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
@@ -256,7 +263,11 @@ class Record:
         body = val[3:-1]
         body = cls.body_parse(rectype, body, parent)
         assert sum(val) % 0x100 == 0
-        return cls(rectype, '%x' % rectype.value , length, body), rest
+        try:
+            typehex = '%x' % rectype.value
+        except AttributeError:
+            typehex = '%x' % rectype
+        return cls(rectype, typehex , length, body), rest
 
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes, module) -> list[Subrecord]:
@@ -302,16 +313,15 @@ class Module:
 
 
 scroll_path = Path(sys.argv[1])
-codex_path = Path(scroll_path.with_suffix('.record'))
-seg_numb = 0
-lnames = []
-with open(scroll_path, "rb") as file:
-    scroll = file.read()
-if 'scroll' not in locals() or not scroll:
-    # pycharm complained that scroll may not initialize
-    # but I don't think this is possible.
-    print(scroll_path.name, "not found", file=sys.stderr)
-module = Module(scroll)
-with open(codex_path, "w") as file:
-    file.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
+for scroll in scroll_path.iterdir():
+    if scroll.suffix.lower() != ".obj":
+        continue
+    codex_path = Path(scroll.with_suffix('.record'))
+    seg_numb = 0
+    lnames = []
+    with open(scroll, "rb") as f:
+        content = f.read()
+    module = Module(content)
+    with open(codex_path, "w") as f:
+        f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
 
