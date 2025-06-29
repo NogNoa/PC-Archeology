@@ -116,7 +116,16 @@ class ModEnd(Subrecord):
 @dataclass
 class External(Subrecord):
     name: str
-    obj_type: str
+    obj_type: str | int
+    ext_index: int
+
+    @classmethod
+    def create(cls, val: bytes, index: int):
+        name_end = val.find(b"\x00")
+        name = str(val[:name_end])
+        obj_type = val[name_end + 1]
+        ext_index = index
+        return cls(name, obj_type, ext_index), val[name_end + 2:]
 
 
 @dataclass
@@ -288,6 +297,11 @@ class Record:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
+        elif rectype == RecordType.EXTDEF:
+            body = []
+            while val:
+                external, val = External.create(val, module.ext_numb)
+                body.append(external)
         else:
             body = val
         return body
@@ -297,6 +311,7 @@ class Module:
     def __init__(self, body: bytes):
         val: list[Record] = []
         self.seg_numb = 1
+        self.ext_numb = 1
         self.lnames : tuple[str, ...] = ()
         while body:
             rec, body = Record.create(self, body)
@@ -305,7 +320,10 @@ class Module:
                 self.lnames = tuple(n.body for n in rec.body)
             elif rec.rectype == RecordType.SEGDEF:
                 self.seg_numb += 1
+            elif rec.rectype == RecordType.EXTDEF:
+                self.ext_numb += 1
         self.seg_numb -= 1
+        self.ext_numb -= 1
         self.val = tuple(val)
 
     def __call__(self) -> tuple[Record, ...]:
