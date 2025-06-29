@@ -115,17 +115,17 @@ class ModEnd(Subrecord):
 
 @dataclass
 class External(Subrecord):
-    name: str
+    name: NAME
     obj_type: str | int
     ext_index: int
 
     @classmethod
     def create(cls, val: bytes, index: int):
-        name_end = val.find(b"\x00")
-        name = str(val[:name_end])
-        obj_type = val[name_end + 1]
+        length = val[0]
+        name = NAME(length, val[1:length + 1])
+        obj_type = val[length + 1]
         ext_index = index
-        return cls(name, obj_type, ext_index), val[name_end + 2:]
+        return cls(name, obj_type, ext_index), val[length + 2:]
 
 
 @dataclass
