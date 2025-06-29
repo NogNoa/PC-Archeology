@@ -297,6 +297,7 @@ class Record:
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
+            module.seg_numb += 1
             body = SegDef(module.seg_numb, val, module.lnames)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
@@ -305,6 +306,7 @@ class Record:
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
+                module.ext_numb += 1
                 external, val = External.create(val, module)
                 body.append(external)
         else:
@@ -315,8 +317,8 @@ class Record:
 class Module:
     def __init__(self, body: bytes):
         val: list[Record] = []
-        self.seg_numb = 1
-        self.ext_numb = 1
+        self.seg_numb = 0
+        self.ext_numb = 0
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
         while body:
@@ -324,12 +326,6 @@ class Module:
             val.append(rec)
             if rec.rectype == RecordType.LNAMES:
                 self.lnames = tuple(n.body for n in rec.body)
-            elif rec.rectype == RecordType.SEGDEF:
-                self.seg_numb += 1
-            elif rec.rectype == RecordType.EXTDEF:
-                self.ext_numb += 1
-        self.seg_numb -= 1
-        self.ext_numb -= 1
         self.val = tuple(val)
 
     def __call__(self) -> tuple[Record, ...]:
