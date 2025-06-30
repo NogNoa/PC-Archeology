@@ -270,29 +270,30 @@ class GroupDef(Subrecord):
 
 @dataclass
 class Public_Base(Subrecord):
-    group: str = ''
-    segment: Optional[SegDef] = None
+    grp_name: str = ''
+    seg_name: str = ''
     frame_numb: Optional[int] = None
 
-    def __init__(self, body: bytes, segments: tuple[[SegDef]], groups: tuple[GroupDef] = ()):
+    def __init__(self, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
         group_index, body = index_create(body)
         segment_index, body = index_create(body)
         if segment_index:
-            self.segment = segments[segment_index - 1]
+            self.segment : SegDef = segments[segment_index - 1]
+            self.seg_name = str(self.segment.seg_name)
             if group_index and groups:
-                self.group = groups[group_index - 1]
+                self.group : GroupDef = groups[group_index - 1]
+                self.grp_name = str(self.group.name)
         else:
             assert not group_index
             self.frame_numb, body = body[:2], body[2:]
-
 
 
 @dataclass
 class PubDef(Subrecord):
     base: Public_Base
 
-    def __init__(self, body: bytes, segments: tuple[[SegDef]]):
-        self.base = Public_Base(body, segments)
+    def __init__(self, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
+        self.base = Public_Base(body, segments, groups)
 
 
 @dataclass
@@ -339,8 +340,9 @@ class Record:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
+            module.groups.append(body)
         elif rectype == RecordType.PUBDEF:
-            body = PubDef(val, module.segments)
+            body = PubDef(val, module.segments, module.groups)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
@@ -359,6 +361,7 @@ class Module:
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
         self.segments: list[SegDef] = []
+        self.groups: list[GroupDef] = []
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
