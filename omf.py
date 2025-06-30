@@ -171,6 +171,25 @@ class Comment(Subrecord):
         self.body = body[2:]
 
 
+class Public_Base(Subrecord):
+    group_index: int
+    segment_index: int
+    frame_numb: Optional[int]
+
+    def __init__(self, body: bytes):
+        group_index = INDEX(body)
+        body = body[group_index.length:]
+        self.group_index = group_index()
+        segment_index = INDEX(body)
+        body = body[segment_index.length:]
+        self.segment_index = segment_index()
+
+@dataclass
+class PubDef(Subrecord):
+
+    def __init__(self, body: bytes):
+        pass
+
 @dataclass
 class Attr(Subrecord):
     locateability: str
