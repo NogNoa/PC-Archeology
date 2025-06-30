@@ -54,6 +54,14 @@ class DescriptorType(Enum):
     SI = 0xFF
 
 
+def index_create(body: bytes) -> tuple[int, bytes]:
+    val = body[0]
+    if val & 0x80:
+        return (val ^ 0x80) << 8 | body[1], body[2:]
+    else:
+        return val, body[1:]
+
+
 class Subrecord:
     pass
 
@@ -81,27 +89,6 @@ class NUMBER(Subrecord):
 
     def __repr__(self):
         return repr(self.val)
-
-
-class INDEX(Subrecord):
-    val: int  # 1 or 2 bytes
-    length: int
-
-    def __init__(self, body: bytes):
-        self.val = body[0]
-        self.length = 1
-        if self.val & 0x80:
-            self.length += 1
-            val = (self.val ^ 0x80) << 8 | body[1]
-
-    def __str__(self):
-        return str(self.val)
-
-    def __repr__(self):
-        return repr(self.val)
-
-    def __call__(self, *args, **kwargs):
-        return self.val
 
 
 class Fixupp(Subrecord):
@@ -177,18 +164,16 @@ class Public_Base(Subrecord):
     frame_numb: Optional[int]
 
     def __init__(self, body: bytes):
-        group_index = INDEX(body)
-        body = body[group_index.length:]
-        self.group_index = group_index()
-        segment_index = INDEX(body)
-        body = body[segment_index.length:]
-        self.segment_index = segment_index()
+        self.group_index, body = index_create(body)
+        self.segment_index, body = index_create(body)
+
 
 @dataclass
 class PubDef(Subrecord):
 
     def __init__(self, body: bytes):
         pass
+
 
 @dataclass
 class Attr(Subrecord):
@@ -256,9 +241,8 @@ class SegDef(Subrecord):
         if self.seg_attr.named and lnames:
             defnames = []
             for _ in range(3):
-                name_index = INDEX(body)
-                body = body[name_index.length:]
-                defnames.append(lnames[name_index() - 1])
+                name_index, body = index_create(body)
+                defnames.append(lnames[name_index - 1])
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
             self.seg_name, self.class_name, self.Overlay_name = ('',) * 3
@@ -289,12 +273,11 @@ class GroupDef(Subrecord):
     descriptors: list[GroupComponentDescriptor]
 
     def __init__(self, body: bytes, lnames: tuple[str, ...] = ()):
-        name_index = INDEX(body)
+        name_index, body = index_create(body)
         if name_index and lnames:
-            self.name = lnames[name_index() - 1]
+            self.name = lnames[name_index - 1]
         else:
             self.name = ''
-        body = body[name_index.length:]
         self.descriptors = []
         while body:
             descriptor, body = GroupComponentDescriptor.Create(body)
