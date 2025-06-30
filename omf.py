@@ -83,6 +83,27 @@ class NUMBER(Subrecord):
         return repr(self.val)
 
 
+class INDEX(Subrecord):
+    val: int  # 1 or 2 bytes
+    length: int
+
+    def __init__(self, body: bytes):
+        self.val = body[0]
+        self.length = 1
+        if self.val & 0x80:
+            self.length += 1
+            val = (self.val ^ 0x80) << 8 | body[1]
+
+    def __str__(self):
+        return str(self.val)
+
+    def __repr__(self):
+        return repr(self.val)
+
+    def __call__(self, *args, **kwargs):
+        return self.val
+
+
 class Fixupp(Subrecord):
 
     def __init__(self, *args):
@@ -120,7 +141,7 @@ class ModEnd(Subrecord):
 class External(Subrecord):
     name: NAME
     obj_type: str | int
-    ext_index: int
+    index: int
 
     @classmethod
     def create(cls, val: bytes, module: "Module") -> tuple[Self, bytes]:
@@ -216,8 +237,9 @@ class SegDef(Subrecord):
         if self.seg_attr.named and lnames:
             defnames = []
             for _ in range(3):
-                name_index, body = body[0] - 1, body[1:]
-                defnames.append(lnames[name_index])
+                name_index = INDEX(body)
+                body = body[name_index.length:]
+                defnames.append(lnames[name_index() - 1])
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
             self.seg_name, self.class_name, self.Overlay_name = ('',) * 3
@@ -248,12 +270,12 @@ class GroupDef(Subrecord):
     descriptors: list[GroupComponentDescriptor]
 
     def __init__(self, body: bytes, lnames: tuple[str, ...] = ()):
-        name_index = body[0]
+        name_index = INDEX(body)
         if name_index and lnames:
-            self.name = lnames[name_index - 1]
+            self.name = lnames[name_index() - 1]
         else:
             self.name = ''
-        body = body[1:]
+        body = body[name_index.length:]
         self.descriptors = []
         while body:
             descriptor, body = GroupComponentDescriptor.Create(body)
