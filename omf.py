@@ -274,26 +274,46 @@ class Public_Base(Subrecord):
     seg_name: str = ''
     frame_numb: Optional[int] = None
 
-    def __init__(self, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
+    @classmethod
+    def create(cls, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
+        base = cls()
         group_index, body = index_create(body)
         segment_index, body = index_create(body)
         if segment_index:
-            self.segment : SegDef = segments[segment_index - 1]
-            self.seg_name = str(self.segment.seg_name)
+            base.segment = segments[segment_index - 1]
+            base.seg_name = str(base.segment.seg_name)
             if group_index and groups:
-                self.group : GroupDef = groups[group_index - 1]
-                self.grp_name = str(self.group.name)
+                base.group = groups[group_index - 1]
+                base.grp_name = str(base.group.name)
         else:
             assert not group_index
-            self.frame_numb, body = body[:2], body[2:]
+            base.frame_numb, body = body[:2], body[2:]
+        return base, body
 
+@dataclass
+class Public(Subrecord):
+    name: str
+    offset: int
+    pub_type: str = ''
+
+    @classmethod
+    def Create(cls, body: bytes, types):
+        public = cls()
+        public.name, body = NAME.create(body)
+        public.offset = body[1] << 8 | body[0]
+        type_index = body[2]
+        if type_index and types:
+            public.type = types[type_index - 1]
 
 @dataclass
 class PubDef(Subrecord):
     base: Public_Base
+    body: tuple[Public]
 
     def __init__(self, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
-        self.base = Public_Base(body, segments, groups)
+        self.base, body = Public_Base.create(body, segments, groups)
+        while body:
+            pass
 
 
 @dataclass
