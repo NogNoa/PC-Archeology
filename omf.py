@@ -158,22 +158,6 @@ class Comment(Subrecord):
         self.body = body[2:]
 
 
-class Public_Base(Subrecord):
-    group_index: int
-    segment_index: int
-    frame_numb: Optional[int]
-
-    def __init__(self, body: bytes):
-        self.group_index, body = index_create(body)
-        self.segment_index, body = index_create(body)
-
-
-@dataclass
-class PubDef(Subrecord):
-
-    def __init__(self, body: bytes):
-        pass
-
 
 @dataclass
 class Attr(Subrecord):
@@ -285,6 +269,33 @@ class GroupDef(Subrecord):
 
 
 @dataclass
+class Public_Base(Subrecord):
+    group: str = ''
+    segment: Optional[SegDef] = None
+    frame_numb: Optional[int] = None
+
+    def __init__(self, body: bytes, segments: tuple[[SegDef]], groups: tuple[GroupDef] = ()):
+        group_index, body = index_create(body)
+        segment_index, body = index_create(body)
+        if segment_index:
+            self.segment = segments[segment_index - 1]
+            if group_index and groups:
+                self.group = groups[group_index - 1]
+        else:
+            assert not group_index
+            self.frame_numb, body = body[:2], body[2:]
+
+
+
+@dataclass
+class PubDef(Subrecord):
+    base: Public_Base
+
+    def __init__(self, body: bytes, segments: tuple[[SegDef]]):
+        self.base = Public_Base(body, segments)
+
+
+@dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
@@ -323,10 +334,13 @@ class Record:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
             body = SegDef(next(module.seg_numb), val, module.lnames)
+            module.segments.append(body)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
+        elif rectype == RecordType.PUBDEF:
+            body = PubDef(val, module.segments)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
@@ -344,6 +358,7 @@ class Module:
         self.ext_numb = itertools.count(start=1)
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
+        self.segments: list[SegDef] = []
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
@@ -356,9 +371,11 @@ class Module:
 
 
 scroll_path = Path(sys.argv[1])
+# noinspection PyUnresolvedReferences
 for scroll in scroll_path.iterdir():
     if scroll.suffix.lower() != ".obj":
         continue
+    # noinspection PyUnresolvedReferences
     codex_path = Path(scroll.with_suffix('.record'))
     lnames = []
     with open(scroll, "rb") as f:
