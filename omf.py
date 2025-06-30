@@ -158,7 +158,6 @@ class Comment(Subrecord):
         self.body = body[2:]
 
 
-
 @dataclass
 class Attr(Subrecord):
     locateability: str
@@ -290,30 +289,34 @@ class Public_Base(Subrecord):
             base.frame_numb, body = body[:2], body[2:]
         return base, body
 
+
 @dataclass
 class Public(Subrecord):
-    name: str
+    name: NAME
     offset: int
     pub_type: str = ''
 
-    @classmethod
-    def Create(cls, body: bytes, types):
-        public = cls()
-        public.name, body = NAME.create(body)
-        public.offset = body[1] << 8 | body[0]
+    def __init__(self, name: NAME, body: bytes, types: tuple[str, ...]):
+        self.name = name
+        self.offset = body[1] << 8 | body[0]
         type_index = body[2]
         if type_index and types:
-            public.type = types[type_index - 1]
+            self.type = types[type_index - 1]
+
 
 @dataclass
 class PubDef(Subrecord):
     base: Public_Base
-    body: tuple[Public]
+    body: tuple[Public, ...]
 
-    def __init__(self, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
-        self.base, body = Public_Base.create(body, segments, groups)
-        while body:
-            pass
+    def __init__(self, val: bytes, segments: list[SegDef], groups: list[GroupDef], types: tuple[str, ...]):
+        self.base, val = Public_Base.create(val, segments, groups)
+        body = []
+        while val:
+            name, val = NAME.create(val)
+            body.append(Public(name=name, body=val[:3], types=()))
+            val = val[3:]
+        self.body = tuple(body)
 
 
 @dataclass
@@ -362,7 +365,7 @@ class Record:
             body = GroupDef(val, module.lnames)
             module.groups.append(body)
         elif rectype == RecordType.PUBDEF:
-            body = PubDef(val, module.segments, module.groups)
+            body = PubDef(val, module.segments, module.groups, module.typedefs)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
