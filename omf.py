@@ -1,3 +1,4 @@
+import itertools
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -125,7 +126,7 @@ class External(Subrecord):
     def create(cls, val: bytes, module: "Module") -> tuple[Self, bytes]:
         name, val = NAME.create(val)
         obj_type = val[0]
-        ext_index = module.ext_numb
+        ext_index = next(module.ext_numb)
         if obj_type and module.typedefs:
             obj_type = module.typedefs[obj_type]
         return cls(name, obj_type, ext_index), val[1:]
@@ -297,8 +298,7 @@ class Record:
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
-            module.seg_numb += 1
-            body = SegDef(module.seg_numb, val, module.lnames)
+            body = SegDef(next(module.seg_numb), val, module.lnames)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
@@ -306,7 +306,6 @@ class Record:
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
-                module.ext_numb += 1
                 external, val = External.create(val, module)
                 body.append(external)
         else:
@@ -317,8 +316,8 @@ class Record:
 class Module:
     def __init__(self, body: bytes):
         val: list[Record] = []
-        self.seg_numb = 0
-        self.ext_numb = 0
+        self.seg_numb = itertools.count(start=1)
+        self.ext_numb = itertools.count(start=1)
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
         while body:
@@ -337,7 +336,6 @@ for scroll in scroll_path.iterdir():
     if scroll.suffix.lower() != ".obj":
         continue
     codex_path = Path(scroll.with_suffix('.record'))
-    seg_numb = 0
     lnames = []
     with open(scroll, "rb") as f:
         content = f.read()
