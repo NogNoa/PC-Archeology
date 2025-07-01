@@ -274,16 +274,13 @@ class Public_Base(Subrecord):
     frame_numb: Optional[int] = None
 
     @classmethod
-    def create(cls, body: bytes, segments: list[SegDef], groups: list[GroupDef]):
+    def create(cls, body: bytes, segments: list[SegDef]):
         base = cls()
         group_index, body = index_create(body)
         segment_index, body = index_create(body)
         if segment_index:
             base.segment = segments[segment_index - 1]
             base.seg_name = str(base.segment.seg_name)
-            if group_index and groups:
-                base.group = groups[group_index - 1]
-                base.grp_name = str(base.group.name)
         else:
             assert not group_index
             base.frame_numb, body = body[:2], body[2:]
@@ -309,8 +306,8 @@ class PubDef(Subrecord):
     base: Public_Base
     body: tuple[Public, ...]
 
-    def __init__(self, val: bytes, segments: list[SegDef], groups: list[GroupDef], types: tuple[str, ...]):
-        self.base, val = Public_Base.create(val, segments, groups)
+    def __init__(self, val: bytes, segments: list[SegDef], types: tuple[str, ...]):
+        self.base, val = Public_Base.create(val, segments)
         body = []
         while val:
             name, val = NAME.create(val)
@@ -345,7 +342,7 @@ class Record:
         return cls(rectype, typehex , length, body), rest
 
     @staticmethod
-    def body_parse(rectype: RecordType, val: bytes, module) -> list[Subrecord]:
+    def body_parse(rectype: RecordType, val: bytes, module: "Module") -> list[Subrecord]:
         if rectype in {RecordType.THEADR, RecordType.LHEADR}:
             body, remainder = NAME.create(val)
             assert not remainder
@@ -363,9 +360,8 @@ class Record:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
-            module.groups.append(body)
         elif rectype == RecordType.PUBDEF:
-            body = PubDef(val, module.segments, module.groups, module.typedefs)
+            body = PubDef(val, module.segments, module.typedefs)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
@@ -384,7 +380,6 @@ class Module:
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
         self.segments: list[SegDef] = []
-        self.groups: list[GroupDef] = []
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
@@ -394,6 +389,25 @@ class Module:
 
     def __call__(self) -> tuple[Record, ...]:
         return self.val
+
+
+class DeserializedModule:
+    lnames: tuple[str, ...]
+    typedefs: tuple[str, ...]
+    segments: list[SegDef]
+    groups: list[GroupDef]
+
+    def __init__(self, module: list[Record]):
+        self.groups = []
+        for rec in module:
+            if rec.rectype == RecordType.GRPDEF:
+                self.groups.append(rec.body)
+            if rec.rectype == RecordType.PUBDEF:
+                if rec.base.group_index and self.groups:
+                    rec.base.base.group = self.groups[rec.base.group_index - 1]
+                    rec.base.base.grp_name = str(rec.base.base.group.name)
+
+
 
 
 scroll_path = Path(sys.argv[1])
