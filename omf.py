@@ -396,16 +396,25 @@ class DeserializedModule:
     typedefs: tuple[str, ...]
     segments: list[SegDef]
     groups: list[GroupDef]
+    publics: list[dict]
 
     def __init__(self, module: list[Record]):
         self.groups = []
+        self.publics = []
         for rec in module:
-            if isinstance(rec.body, GroupDef):
-                self.groups.append(rec.body)
-            if isinstance(rec.body, PubDef):
-                if rec.body.base.grp_ind and self.groups:
-                    rec.base.group = self.groups[rec.base.group_index - 1]
-                    rec.base.base.grp_name = str(rec.base.base.group.name)
+            src = rec.body
+            if isinstance(src, GroupDef):
+                self.groups.append(src)
+            if isinstance(src, PubDef):
+                pubdef = tuple(
+                    {'name': str(pub.name.body),
+                     'ofsset' : pub.offset
+                     }
+                    for pub in src.body)
+                if src.base.grp_ind and self.groups:
+                    for pub in pubdef:
+                        pub["group"] = self.groups[src.base.grp_ind - 1]
+                self.publics.extend(pubdef)
 
 
 scroll_path = Path(sys.argv[1])
