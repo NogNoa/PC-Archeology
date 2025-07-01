@@ -269,20 +269,20 @@ class GroupDef(Subrecord):
 
 @dataclass
 class Public_Base(Subrecord):
-    grp_name: str = ''
+    grp_ind: int = 0
     seg_name: str = ''
     frame_numb: Optional[int] = None
 
     @classmethod
     def create(cls, body: bytes, segments: list[SegDef]):
         base = cls()
-        group_index, body = index_create(body)
+        base.grp_ind, body = index_create(body)
         segment_index, body = index_create(body)
         if segment_index:
             base.segment = segments[segment_index - 1]
             base.seg_name = str(base.segment.seg_name)
         else:
-            assert not group_index
+            assert not base.grp_ind
             base.frame_numb, body = body[:2], body[2:]
         return base, body
 
@@ -400,14 +400,12 @@ class DeserializedModule:
     def __init__(self, module: list[Record]):
         self.groups = []
         for rec in module:
-            if rec.rectype == RecordType.GRPDEF:
+            if isinstance(rec.body, GroupDef):
                 self.groups.append(rec.body)
-            if rec.rectype == RecordType.PUBDEF:
-                if rec.base.group_index and self.groups:
-                    rec.base.base.group = self.groups[rec.base.group_index - 1]
+            if isinstance(rec.body, PubDef):
+                if rec.body.base.grp_ind and self.groups:
+                    rec.base.group = self.groups[rec.base.group_index - 1]
                     rec.base.base.grp_name = str(rec.base.base.group.name)
-
-
 
 
 scroll_path = Path(sys.argv[1])
