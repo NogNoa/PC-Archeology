@@ -288,10 +288,12 @@ class Public(Subrecord):
     offset: int
     type_index: int
 
-    def __init__(self, name: NAME, body: bytes):
-        self.name = name
-        self.offset = body[1] << 8 | body[0]
+    @classmethod
+    def create(cls, body: bytes):
+        name, body = NAME.create(body)
+        offset = body[1] << 8 | body[0]
         type_index, body = index_create(body[2:])
+        return cls(name, offset, type_index), body
 
 
 @dataclass
@@ -303,9 +305,8 @@ class PubDef(Subrecord):
         self.base, val = Public_Base.create(val)
         body = []
         while val:
-            name, val = NAME.create(val)
-            body.append(Public(name=name, body=val[:3]))
-            val = val[3:]
+            pub, val = Public.create(val)
+            body.append(pub)
         self.body = tuple(body)
 
 
@@ -414,8 +415,8 @@ class DeserializedModule:
                         pubdef["segment"] = self.segments[src.base.grp_ind - 1]
                 if self.typedefs:
                     for pl, pub in enumerate(src.body):
-                        if pub.type_int:
-                            pubdef["publics"][pl]['type'] = self.typedefs[pub.type_int - 1]
+                        if pub.type_index:
+                            pubdef["publics"][pl]['type'] = self.typedefs[pub.type_index - 1]
                 self.publics.append(pubdef)
             elif isinstance(src, SegDef):
                 self.segments.append(src)
