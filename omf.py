@@ -44,10 +44,14 @@ class RecordType(Enum):
     LINNUM = 0x94
     LNAMES = 0x96
     SEGDEF = 0x98
+    SEGDEF2 = 0x99
     GRPDEF = 0x9A
     FIXUPP = 0x9C
     LEDATA = 0xA0
+    LEDATA2 = 0xA1
     LIDATA = 0xA2
+    LEXTDEF = 0xB4
+    LPUBDEF = 0xB6
 
 
 class DescriptorType(Enum):
@@ -212,8 +216,11 @@ class LinNum(Subrecord):
         while val:
             line_num = val[1] << 8 | val[0]
             assert line_num < 0x8000
-            offset = val[2] << 8 | val[1]
+            offset = val[3] << 8 | val[2]
             body.append((line_num, offset))
+            val = val[4:]
+        # noinspection PyTypeChecker
+        self.body = tuple(body)
 
 
 @dataclass
@@ -358,7 +365,7 @@ class Record:
                 body.append(name)
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
-        elif rectype == RecordType.SEGDEF:
+        elif rectype in {RecordType.SEGDEF, RecordType.SEGDEF2}:
             body = SegDef(next(module.seg_numb), val)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
@@ -394,7 +401,7 @@ class Module:
 
 @dataclass
 class DeserializedModule:
-    lnames: tuple[str, ...] = ''
+    lnames: list[str] = ()
     typedefs: tuple[str, ...] = ()
     segments: list[dict] = ()
     groups: list[dict] = ()
@@ -402,6 +409,7 @@ class DeserializedModule:
     externals: list[dict] = ()
 
     def __init__(self, module: tuple[Record, ...]):
+        self.lnames = []
         self.segments = []
         self.groups = []
         self.publics = []
@@ -440,7 +448,10 @@ class DeserializedModule:
                 if self.lnames:
                     for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
                         if name_ind:
-                            segment["name"] += " " + str(self.lnames[name_ind - 1])
+                            try:
+                                segment["name"] += " " + str(self.lnames[name_ind - 1])
+                            except IndexError:
+                                pass
                 segment["name"] = segment["name"].strip()
                 self.segments.append(segment)
             elif isinstance(src, ExtDef):
@@ -450,7 +461,7 @@ class DeserializedModule:
                 if src.obj_type and self.typedefs:
                     obj_type = self.typedefs[src.obj_type - 1]
             elif rec.rectype == RecordType.LNAMES:
-                self.lnames = tuple(n.body for n in rec.body)
+                self.lnames.extend([n.body for n in rec.body])
 
 
 scroll_path = Path(sys.argv[1])
