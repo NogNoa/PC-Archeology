@@ -157,6 +157,51 @@ class Comment(Subrecord):
 
 
 @dataclass
+class Public_Base(Subrecord):
+    grp_ind: int = 0
+    seg_ind: int = 0
+    frame_numb: Optional[int] = None
+
+    @classmethod
+    def create(cls, body: bytes):
+        base = cls()
+        base.grp_ind, body = index_create(body)
+        base.seg_ind, body = index_create(body)
+        if not base.seg_ind:
+            assert not base.grp_ind
+            base.frame_numb, body = body[:2], body[2:]
+        return base, body
+
+
+@dataclass
+class Public(Subrecord):
+    name: NAME
+    offset: int
+    type_index: int
+
+    @classmethod
+    def create(cls, body: bytes):
+        name, body = NAME.create(body)
+        offset = body[1] << 8 | body[0]
+        type_index, body = index_create(body[2:])
+        return cls(name, offset, type_index), body
+
+
+@dataclass
+class PubDef(Subrecord):
+    base: Public_Base
+    body: tuple[Public, ...]
+
+    def __init__(self, val: bytes):
+        self.base, val = Public_Base.create(val)
+        body = []
+        while val:
+            pub, val = Public.create(val)
+            body.append(pub)
+        self.body = tuple(body)
+
+
+@dataclass
 class Attr(Subrecord):
     locateability: str
     alignment: str
@@ -259,51 +304,6 @@ class GroupDef(Subrecord):
         while body:
             descriptor, body = GroupComponentDescriptor.Create(body)
             self.descriptors.append(descriptor)
-
-
-@dataclass
-class Public_Base(Subrecord):
-    grp_ind: int = 0
-    seg_ind: int = 0
-    frame_numb: Optional[int] = None
-
-    @classmethod
-    def create(cls, body: bytes):
-        base = cls()
-        base.grp_ind, body = index_create(body)
-        base.seg_ind, body = index_create(body)
-        if not base.seg_ind:
-            assert not base.grp_ind
-            base.frame_numb, body = body[:2], body[2:]
-        return base, body
-
-
-@dataclass
-class Public(Subrecord):
-    name: NAME
-    offset: int
-    type_index: int
-
-    @classmethod
-    def create(cls, body: bytes):
-        name, body = NAME.create(body)
-        offset = body[1] << 8 | body[0]
-        type_index, body = index_create(body[2:])
-        return cls(name, offset, type_index), body
-
-
-@dataclass
-class PubDef(Subrecord):
-    base: Public_Base
-    body: tuple[Public, ...]
-
-    def __init__(self, val: bytes):
-        self.base, val = Public_Base.create(val)
-        body = []
-        while val:
-            pub, val = Public.create(val)
-            body.append(pub)
-        self.body = tuple(body)
 
 
 @dataclass
