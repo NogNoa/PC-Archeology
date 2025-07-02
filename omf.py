@@ -161,7 +161,7 @@ class Comment(Subrecord):
 
 
 @dataclass
-class Base(Subrecord):
+class Base:
     grp_ind: int = 0
     seg_ind: int = 0
     frame_numb: Optional[int] = None
@@ -173,7 +173,7 @@ class Base(Subrecord):
         base.seg_ind, body = index_create(body)
         if not base.seg_ind:
             assert not base.grp_ind
-            base.frame_numb, body = body[:2], body[2:]
+            base.frame_numb, body = body[1] << 8 | body[0], body[2:]
         return base, body
 
 
@@ -407,6 +407,7 @@ class DeserializedModule:
     groups: list[dict] = ()
     publics: list[dict] = ()
     externals: list[dict] = ()
+    linenums: dict = ()
 
     def __init__(self, module: tuple[Record, ...]):
         self.lnames = []
@@ -419,6 +420,7 @@ class DeserializedModule:
             if isinstance(src, GroupDef):
                 group = {"descriptors": src.descriptors}
                 if src.name_index and self.lnames:
+                    # noinspection PyTypeChecker
                     group["name"] = self.lnames[src.name_index - 1]
                 else:
                     # noinspection PyTypeChecker
@@ -434,13 +436,15 @@ class DeserializedModule:
                 if src.base.grp_ind and self.groups:
                     # noinspection PyTypeChecker
                     pubdef["group"] = self.groups[src.base.grp_ind - 1]
-                    if src.base.grp_ind and self.segments:
+                    if src.base.seg_ind and self.segments:
                         # noinspection PyTypeChecker
-                        pubdef["segment"] = self.segments[src.base.grp_ind - 1]
+                        pubdef["segment"] = self.segments[src.base.seg_ind - 1]
                 if self.typedefs:
                     for pl, pub in enumerate(src.body):
                         if pub.type_index:
                             pubdef["publics"][pl]['type'] = self.typedefs[pub.type_index - 1]
+                # noinspection PyTypeChecker
+                pubdef["Locatability"] = "logical" if src.base.frame_numb is None else "physical"
                 self.publics.append(pubdef)
             elif isinstance(src, SegDef):
                 segment = {"name": '',
@@ -448,10 +452,7 @@ class DeserializedModule:
                 if self.lnames:
                     for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
                         if name_ind:
-                            try:
-                                segment["name"] += " " + str(self.lnames[name_ind - 1])
-                            except IndexError:
-                                pass
+                            segment["name"] += " " + str(self.lnames[name_ind - 1])
                 segment["name"] = segment["name"].strip()
                 self.segments.append(segment)
             elif isinstance(src, ExtDef):
@@ -462,6 +463,17 @@ class DeserializedModule:
                     obj_type = self.typedefs[src.obj_type - 1]
             elif rec.rectype == RecordType.LNAMES:
                 self.lnames.extend([n.body for n in rec.body])
+            elif isinstance(src, LinNum):
+                linenums = {}
+                if src.base.grp_ind and self.groups:
+                    linenums["group"] = self.groups[src.base.grp_ind - 1]
+                if src.base.seg_ind and self.segments:
+                    linenums["segment"] = self.segments[src.base.seg_ind - 1]
+                if src.base.frame_numb is not None:
+                    linenums["frame_number"] = src.base.frame_numb
+                    linenums["Locatability"] = "physical"
+                else:
+                    linenums["Locatability"] = "logical"
 
 
 scroll_path = Path(sys.argv[1])
