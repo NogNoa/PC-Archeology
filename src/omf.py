@@ -346,21 +346,42 @@ class LEData(Subrecord):
 
 
 class IteratedBlock:
-    def __init__(self, body: bytes):
+    repeats: int
+    blocks: int
+    content: bytes | list[Self]
+
+    @classmethod
+    def create(cls, body: bytes):
+        self = cls()
         self.repeats = body[1] << 8 | body[0]
         assert self.repeats > 0
         self.blocks = body[2]
         if not self.blocks:
-            self.content = body[3:]
+            length = body[3]
+            self.content = body[4:4+length]
+            body = body[4+length:]
         else:
-            self.content = IteratedBlock(body[3:])
+            self.content = []
+            body = body[3:]
+            for _ in range(self.blocks):
+                blck, body = IteratedBlock.create(body)
+                self.content.append(blck)
+        return self, body
 
     def __len__(self):
-        return self.repeats * len(self.content)
+        if isinstance(self.content, list):
+            internal_length = sum(len(b) for b in self.content)
+        else:
+            internal_length = len(self.content)
+        return self.repeats * internal_length
 
     def __iter__(self):
+        if isinstance(self.content, list):
+            content = itertools.chain.from_iterable(self.content)
+        else:
+            content = self.content
         for _ in range(self.repeats):
-            yield from iter(self.content)
+            yield from iter(content)
 
 
 @dataclass
@@ -369,10 +390,11 @@ class LIData(Subrecord):
     offset: int
     body: IteratedBlock
 
-    def __init__(self, body: bytes):
-        self.seg_ind, body = index_create(body)
-        self.offset = body[1] << 8 | body[0]
-        self.body = IteratedBlock(body[2:])
+    def __init__(self, val: bytes):
+        self.seg_ind, val = index_create(val)
+        self.offset = val[1] << 8 | val[0]
+        self.body, val = IteratedBlock.create(val[2:])
+        assert not val
 
 
 @dataclass
@@ -429,6 +451,8 @@ class Record:
             body = LinNum(val)
         elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
             body = LEData(val)
+        elif rectype in {RecordType.LIDATA, RecordType.LIDATA2}:
+            body = LIData(val)
         else:
             body = val
         return body
