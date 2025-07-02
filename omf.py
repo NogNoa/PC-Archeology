@@ -157,7 +157,7 @@ class Comment(Subrecord):
 
 
 @dataclass
-class Public_Base(Subrecord):
+class Base(Subrecord):
     grp_ind: int = 0
     seg_ind: int = 0
     frame_numb: Optional[int] = None
@@ -189,16 +189,31 @@ class Public(Subrecord):
 
 @dataclass
 class PubDef(Subrecord):
-    base: Public_Base
+    base: Base
     body: tuple[Public, ...]
 
     def __init__(self, val: bytes):
-        self.base, val = Public_Base.create(val)
+        self.base, val = Base.create(val)
         body = []
         while val:
             pub, val = Public.create(val)
             body.append(pub)
         self.body = tuple(body)
+
+
+@dataclass
+class LinNum(Subrecord):
+    base: Base
+    body: tuple[tuple[int, int]]
+
+    def __init__(self, val: bytes):
+        self.base, val = Base.create(val)
+        body = []
+        while val:
+            line_num = val[1] << 8 | val[0]
+            assert line_num < 0x8000
+            offset = val[2] << 8 | val[1]
+            body.append((line_num, offset))
 
 
 @dataclass
@@ -356,6 +371,8 @@ class Record:
             while val:
                 external, val = ExtDef.create(val, module)
                 body.append(external)
+        elif rectype == RecordType.LINNUM:
+            body = LinNum(val)
         else:
             body = val
         return body
@@ -423,7 +440,7 @@ class DeserializedModule:
                 if self.lnames:
                     for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
                         if name_ind:
-                            segment["name"] += " " + self.lnames[name_ind]
+                            segment["name"] += " " + str(self.lnames[name_ind - 1])
                 segment["name"] = segment["name"].strip()
                 self.segments.append(segment)
             elif isinstance(src, ExtDef):
