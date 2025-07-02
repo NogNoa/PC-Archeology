@@ -22,14 +22,20 @@ python src/5¼'-disk.py extract path/to/disk.img
 
 Create a new disk image from a folder:
 ```sh
-python src/5¼'-disk.py create path/to/folder -f path/to/folder
+python src/5¼'-disk.py create path/to/prototype -f path/to/folder
 ```
+A protoype disk image, to base the new disk on, is required.
 
 ### CGA Graphics Tool
 
-Convert a CGA graphics file to PNG:
+Convert a full-screen CGA graphics file to PNG:
 ```sh
 python src/CGA.py path/to/file.bin cg
+```
+
+convert a tile or charecter graphics file to PNG:
+```sh
+python src/CGA.py path/to/file.bin ft
 ```
 
 ### OMF Parser
