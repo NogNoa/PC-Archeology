@@ -200,12 +200,12 @@ class SegDef(Subrecord):
     index: int  # 31-bit
     seg_attr: Attr
     length: int
-    seg_name: str
-    class_name: str
-    Overlay_name: str
+    seg_name: int
+    class_name: int
+    Overlay_name: int
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, index, body: bytes, lnames: tuple[str, ...]):
+    def __init__(self, index, body: bytes):
         self.index = index
         self.seg_attr, body = Attr.Create(body)
         self.length = body[1] << 8 | body[0]
@@ -219,14 +219,14 @@ class SegDef(Subrecord):
             self.length = BIG_SEGMENT
         if isinstance(self.seg_attr.child, LoadtimeLocateable):
             assert self.length <= self.seg_attr.child.max_length
-        if self.seg_attr.named and lnames:
+        if self.seg_attr.named:
             defnames = []
             for _ in range(3):
                 name_index, body = index_create(body)
-                defnames.append(lnames[name_index - 1])
+                defnames.append(name_index)
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
-            self.seg_name, self.class_name, self.Overlay_name = ('',) * 3
+            self.seg_name, self.class_name, self.Overlay_name = (0,) * 3
 
 
 @dataclass
@@ -250,15 +250,11 @@ class GroupComponentDescriptor:
 
 @dataclass
 class GroupDef(Subrecord):
-    name: str
+    name_index: int
     descriptors: list[GroupComponentDescriptor]
 
-    def __init__(self, body: bytes, lnames: tuple[str, ...] = ()):
-        name_index, body = index_create(body)
-        if name_index and lnames:
-            self.name = lnames[name_index - 1]
-        else:
-            self.name = ''
+    def __init__(self, body: bytes):
+        self.name_index, body = index_create(body)
         self.descriptors = []
         while body:
             descriptor, body = GroupComponentDescriptor.Create(body)
@@ -348,11 +344,11 @@ class Record:
         elif rectype == RecordType.MOOEND:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
-            body = SegDef(next(module.seg_numb), val, module.lnames)
+            body = SegDef(next(module.seg_numb), val)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
-            body = GroupDef(val, module.lnames)
+            body = GroupDef(val)
         elif rectype == RecordType.PUBDEF:
             body = PubDef(val)
         elif rectype == RecordType.EXTDEF:
@@ -370,12 +366,9 @@ class Module:
         val: list[Record] = []
         self.seg_numb = itertools.count(start=1)
         self.ext_numb = itertools.count(start=1)
-        self.lnames : tuple[str, ...] = ()
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
-            if rec.rectype == RecordType.LNAMES:
-                self.lnames = tuple(n.body for n in rec.body)
         self.val = tuple(val)
 
     def __call__(self) -> tuple[Record, ...]:
@@ -386,8 +379,8 @@ class Module:
 class DeserializedModule:
     lnames: tuple[str, ...] = ''
     typedefs: tuple[str, ...] = ()
-    segments: list[SegDef] = ()
-    groups: list[GroupDef] = ()
+    segments: list[dict] = ()
+    groups: list[dict] = ()
     publics: list[dict] = ()
     externals: list[dict] = ()
 
@@ -399,7 +392,13 @@ class DeserializedModule:
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
-                self.groups.append(src)
+                group = {"descriptors": src.descriptors}
+                if src.name_index and self.lnames:
+                    group["name"] = self.lnames[src.name_index - 1]
+                else:
+                    # noinspection PyTypeChecker
+                    group["name"] = ''
+                self.groups.append(group)
             elif isinstance(src, PubDef):
                 pubdef = {"publics": tuple(
                     {'name': str(pub.name.body),
@@ -419,13 +418,22 @@ class DeserializedModule:
                             pubdef["publics"][pl]['type'] = self.typedefs[pub.type_index - 1]
                 self.publics.append(pubdef)
             elif isinstance(src, SegDef):
-                self.segments.append(src)
+                segment = {"name": '',
+                           "attrs": src.seg_attr}
+                if self.lnames:
+                    for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
+                        if name_ind:
+                            segment["name"] += " " + self.lnames[name_ind]
+                segment["name"] = segment["name"].strip()
+                self.segments.append(segment)
             elif isinstance(src, ExtDef):
                 extdef = {"name": str(src.name.body),
                           "type": src.obj_type
                           }
                 if src.obj_type and self.typedefs:
                     obj_type = self.typedefs[src.obj_type - 1]
+            elif rec.rectype == RecordType.LNAMES:
+                self.lnames = tuple(n.body for n in rec.body)
 
 
 scroll_path = Path(sys.argv[1])
@@ -435,7 +443,6 @@ for scroll in scroll_path.iterdir():
         continue
     # noinspection PyUnresolvedReferences
     codex_path = Path(scroll.with_suffix('.record'))
-    lnames = []
     with open(scroll, "rb") as f:
         content = f.read()
     module = Module(content)
