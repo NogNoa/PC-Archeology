@@ -37,11 +37,14 @@ class LoadtimeLocateable:
 class RecordType(Enum):
     THEADR = 0x80
     LHEADR = 0x82
-    MOOEND = 0x8A
-    EXTDEF = 0x8C
     COMMENT = 0x88
+    MOOEND = 0x8A
+    MOOEND2 = 0x8B
+    EXTDEF = 0x8C
     PUBDEF = 0x90
+    PUBDEF2 = 0x91
     LINNUM = 0x94
+    LINNUM2 = 0x95
     LNAMES = 0x96
     SEGDEF = 0x98
     SEGDEF2 = 0x99
@@ -50,6 +53,7 @@ class RecordType(Enum):
     LEDATA = 0xA0
     LEDATA2 = 0xA1
     LIDATA = 0xA2
+    LIDATA2 = 0xA3
     LEXTDEF = 0xB4
     LPUBDEF = 0xB6
 
@@ -102,6 +106,24 @@ class Fixupp(Subrecord):
 
 
 @dataclass
+class Comment(Subrecord):
+    com_class: int  # byte
+    is_purgable: bool
+    to_list: bool
+    class_is_reserverd: bool
+    body: bytes
+
+    def __init__(self, body: bytes):
+        head = body[0]
+        assert not head & (0x40 - 1)
+        self.is_purgable = not (head & 0x80)
+        self.to_list = not (head & 0x40)
+        self.com_class = body[1]
+        self.class_is_reserverd = not (self.com_class & 0x80)
+        self.body = body[2:]
+
+
+@dataclass
 class ModEnd(Subrecord):
     main: bool
     locateability: str
@@ -142,22 +164,7 @@ class ExtDef(Subrecord):
         return cls(name, obj_type, ext_index), val[1:]
 
 
-@dataclass
-class Comment(Subrecord):
-    com_class: int  # byte
-    is_purgable: bool
-    to_list: bool
-    class_is_reserverd: bool
-    body: bytes
 
-    def __init__(self, body: bytes):
-        head = body[0]
-        assert not head & (0x40 - 1)
-        self.is_purgable = not (head & 0x80)
-        self.to_list = not (head & 0x40)
-        self.com_class = body[1]
-        self.class_is_reserverd = not (self.com_class & 0x80)
-        self.body = body[2:]
 
 
 @dataclass
@@ -376,7 +383,7 @@ class Record:
             while val:
                 name, val = NAME.create(val)
                 body.append(name)
-        elif rectype == RecordType.MOOEND:
+        elif rectype in {RecordType.MOOEND, RecordType.MOOEND2}:
             body = ModEnd(val)
         elif rectype in {RecordType.SEGDEF, RecordType.SEGDEF2}:
             body = SegDef(next(module.seg_numb), val)
@@ -384,14 +391,14 @@ class Record:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val)
-        elif rectype == RecordType.PUBDEF:
+        elif rectype in {RecordType.PUBDEF, RecordType.PUBDEF2, RecordType.LPUBDEF}:
             body = PubDef(val)
-        elif rectype == RecordType.EXTDEF:
+        elif rectype in {RecordType.EXTDEF, RecordType.LEXTDEF}:
             body = []
             while val:
                 external, val = ExtDef.create(val, module)
                 body.append(external)
-        elif rectype == RecordType.LINNUM:
+        elif rectype in {RecordType.LINNUM, RecordType.LINNUM2}:
             body = LinNum(val)
         elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
             body = LEData(val)
