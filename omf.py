@@ -270,18 +270,15 @@ class GroupDef(Subrecord):
 @dataclass
 class Public_Base(Subrecord):
     grp_ind: int = 0
-    seg_name: str = ''
+    seg_ind: int = 0
     frame_numb: Optional[int] = None
 
     @classmethod
-    def create(cls, body: bytes, segments: list[SegDef]):
+    def create(cls, body: bytes):
         base = cls()
         base.grp_ind, body = index_create(body)
-        segment_index, body = index_create(body)
-        if segment_index:
-            base.segment = segments[segment_index - 1]
-            base.seg_name = str(base.segment.seg_name)
-        else:
+        base.seg_ind, body = index_create(body)
+        if not base.seg_ind:
             assert not base.grp_ind
             base.frame_numb, body = body[:2], body[2:]
         return base, body
@@ -306,8 +303,8 @@ class PubDef(Subrecord):
     base: Public_Base
     body: tuple[Public, ...]
 
-    def __init__(self, val: bytes, segments: list[SegDef], types: tuple[str, ...]):
-        self.base, val = Public_Base.create(val, segments)
+    def __init__(self, val: bytes, types: tuple[str, ...]):
+        self.base, val = Public_Base.create(val)
         body = []
         while val:
             name, val = NAME.create(val)
@@ -355,13 +352,12 @@ class Record:
             body = ModEnd(val)
         elif rectype == RecordType.SEGDEF:
             body = SegDef(next(module.seg_numb), val, module.lnames)
-            module.segments.append(body)
         elif rectype == RecordType.COMMENT:
             body = Comment(val)
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
         elif rectype == RecordType.PUBDEF:
-            body = PubDef(val, module.segments, module.typedefs)
+            body = PubDef(val, module.typedefs)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
@@ -379,7 +375,6 @@ class Module:
         self.ext_numb = itertools.count(start=1)
         self.lnames : tuple[str, ...] = ()
         self.typedefs: tuple[str, ...] = ()
-        self.segments: list[SegDef] = []
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
@@ -399,14 +394,15 @@ class DeserializedModule:
     groups: list[GroupDef] = ()
     publics: list[dict] = ()
 
-    def __init__(self, module: list[Record]):
+    def __init__(self, module: tuple[Record, ...]):
+        self.segments = []
         self.groups = []
         self.publics = []
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
                 self.groups.append(src)
-            if isinstance(src, PubDef):
+            elif isinstance(src, PubDef):
                 pubdef = tuple(
                     {'name': str(pub.name.body),
                      'ofsset' : pub.offset
@@ -416,7 +412,13 @@ class DeserializedModule:
                     for pub in pubdef:
                         # noinspection PyTypeChecker
                         pub["group"] = self.groups[src.base.grp_ind - 1]
+                    if src.base.grp_ind and self.segments:
+                        for pub in pubdef:
+                            # noinspection PyTypeChecker
+                            pub["segment"] = self.segments[src.base.grp_ind - 1]
                 self.publics.extend(pubdef)
+            elif isinstance(src, SegDef):
+                self.segments.append(src)
 
 
 scroll_path = Path(sys.argv[1])
