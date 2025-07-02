@@ -125,7 +125,7 @@ class ModEnd(Subrecord):
 
 
 @dataclass
-class External(Subrecord):
+class ExtDef(Subrecord):
     name: NAME
     obj_type: str | int
     index: int
@@ -135,8 +135,6 @@ class External(Subrecord):
         name, val = NAME.create(val)
         obj_type = val[0]
         ext_index = next(module.ext_numb)
-        if obj_type and module.typedefs:
-            obj_type = module.typedefs[obj_type]
         return cls(name, obj_type, ext_index), val[1:]
 
 
@@ -288,14 +286,12 @@ class Public_Base(Subrecord):
 class Public(Subrecord):
     name: NAME
     offset: int
-    pub_type: str = ''
+    type_index: int
 
-    def __init__(self, name: NAME, body: bytes, types: tuple[str, ...]):
+    def __init__(self, name: NAME, body: bytes):
         self.name = name
         self.offset = body[1] << 8 | body[0]
-        type_index = body[2]
-        if type_index and types:
-            self.type = types[type_index - 1]
+        type_index, body = index_create(body[2:])
 
 
 @dataclass
@@ -303,12 +299,12 @@ class PubDef(Subrecord):
     base: Public_Base
     body: tuple[Public, ...]
 
-    def __init__(self, val: bytes, types: tuple[str, ...]):
+    def __init__(self, val: bytes):
         self.base, val = Public_Base.create(val)
         body = []
         while val:
             name, val = NAME.create(val)
-            body.append(Public(name=name, body=val[:3], types=()))
+            body.append(Public(name=name, body=val[:3]))
             val = val[3:]
         self.body = tuple(body)
 
@@ -357,11 +353,11 @@ class Record:
         elif rectype == RecordType.GRPDEF:
             body = GroupDef(val, module.lnames)
         elif rectype == RecordType.PUBDEF:
-            body = PubDef(val, module.typedefs)
+            body = PubDef(val)
         elif rectype == RecordType.EXTDEF:
             body = []
             while val:
-                external, val = External.create(val, module)
+                external, val = ExtDef.create(val, module)
                 body.append(external)
         else:
             body = val
@@ -374,7 +370,6 @@ class Module:
         self.seg_numb = itertools.count(start=1)
         self.ext_numb = itertools.count(start=1)
         self.lnames : tuple[str, ...] = ()
-        self.typedefs: tuple[str, ...] = ()
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
@@ -393,11 +388,13 @@ class DeserializedModule:
     segments: list[SegDef] = ()
     groups: list[GroupDef] = ()
     publics: list[dict] = ()
+    externals: list[dict] = ()
 
     def __init__(self, module: tuple[Record, ...]):
         self.segments = []
         self.groups = []
         self.publics = []
+        self.externals = []
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
@@ -415,9 +412,19 @@ class DeserializedModule:
                     if src.base.grp_ind and self.segments:
                         # noinspection PyTypeChecker
                         pubdef["segment"] = self.segments[src.base.grp_ind - 1]
+                if self.typedefs:
+                    for pl, pub in enumerate(src.body):
+                        if pub.type_int:
+                            pubdef["publics"][pl]['type'] = self.typedefs[pub.type_int - 1]
                 self.publics.append(pubdef)
             elif isinstance(src, SegDef):
                 self.segments.append(src)
+            elif isinstance(src, ExtDef):
+                extdef = {"name": str(src.name.body),
+                          "type": src.obj_type
+                          }
+                if src.obj_type and self.typedefs:
+                    obj_type = self.typedefs[src.obj_type - 1]
 
 
 scroll_path = Path(sys.argv[1])
