@@ -164,9 +164,6 @@ class ExtDef(Subrecord):
         return cls(name, obj_type, ext_index), val[1:]
 
 
-
-
-
 @dataclass
 class Base:
     grp_ind: int = 0
@@ -346,6 +343,36 @@ class LEData(Subrecord):
         self.offset = body[1] << 8 | body[0]
         self.body = body[2:]
         assert len(self.body) <= 0x400
+
+
+class IteratedBlock:
+    def __init__(self, body: bytes):
+        self.repeats = body[1] << 8 | body[0]
+        assert self.repeats > 0
+        self.blocks = body[2]
+        if not self.blocks:
+            self.content = body[3:]
+        else:
+            self.content = IteratedBlock(body[3:])
+
+    def __len__(self):
+        return self.repeats * len(self.content)
+
+    def __iter__(self):
+        for _ in range(self.repeats):
+            yield from iter(self.content)
+
+
+@dataclass
+class LIData(Subrecord):
+    seg_ind: int
+    offset: int
+    body: IteratedBlock
+
+    def __init__(self, body: bytes):
+        self.seg_ind, body = index_create(body)
+        self.offset = body[1] << 8 | body[0]
+        self.body = IteratedBlock(body[2:])
 
 
 @dataclass
