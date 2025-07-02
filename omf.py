@@ -403,20 +403,19 @@ class DeserializedModule:
             if isinstance(src, GroupDef):
                 self.groups.append(src)
             elif isinstance(src, PubDef):
-                pubdef = tuple(
+                pubdef = {"publics": tuple(
                     {'name': str(pub.name.body),
                      'ofsset' : pub.offset
                      }
                     for pub in src.body)
+                }
                 if src.base.grp_ind and self.groups:
-                    for pub in pubdef:
-                        # noinspection PyTypeChecker
-                        pub["group"] = self.groups[src.base.grp_ind - 1]
+                    # noinspection PyTypeChecker
+                    pubdef["group"] = self.groups[src.base.grp_ind - 1]
                     if src.base.grp_ind and self.segments:
-                        for pub in pubdef:
-                            # noinspection PyTypeChecker
-                            pub["segment"] = self.segments[src.base.grp_ind - 1]
-                self.publics.extend(pubdef)
+                        # noinspection PyTypeChecker
+                        pubdef["segment"] = self.segments[src.base.grp_ind - 1]
+                self.publics.append(pubdef)
             elif isinstance(src, SegDef):
                 self.segments.append(src)
 
