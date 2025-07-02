@@ -346,8 +346,8 @@ class LEData(Subrecord):
 
 
 class IteratedBlock:
-    repeats: int
-    blocks: int
+    repeats: int  # 16-bit
+    blocks: int   # 16-bit
     content: bytes | list[Self]
 
     @classmethod
@@ -355,14 +355,14 @@ class IteratedBlock:
         self = cls()
         self.repeats = body[1] << 8 | body[0]
         assert self.repeats > 0
-        self.blocks = body[2]
+        self.blocks = body[3] << 8 | body[2]
         if not self.blocks:
-            length = body[3]
-            self.content = body[4:4+length]
-            body = body[4+length:]
+            length = body[4]
+            self.content = body[5:5+length]
+            body = body[5+length:]
         else:
             self.content = []
-            body = body[3:]
+            body = body[4:]
             for _ in range(self.blocks):
                 blck, body = IteratedBlock.create(body)
                 self.content.append(blck)
