@@ -329,6 +329,19 @@ class GroupDef(Subrecord):
 
 
 @dataclass
+class LEData(Subrecord):
+    seg_ind: int
+    offset: int
+    body: bytes
+
+    def __init__(self, body: bytes):
+        self.seg_ind, body = index_create(body)
+        self.offset = body[1] << 8 | body[0]
+        self.body = body[2:]
+        assert len(self.body) <= 0x400
+
+
+@dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
@@ -380,6 +393,8 @@ class Record:
                 body.append(external)
         elif rectype == RecordType.LINNUM:
             body = LinNum(val)
+        elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
+            body = LEData(val)
         else:
             body = val
         return body
@@ -408,6 +423,7 @@ class DeserializedModule:
     publics: list[dict] = ()
     externals: list[dict] = ()
     linenums: dict = ()
+    data: list[dict] = ()
 
     def __init__(self, module: tuple[Record, ...]):
         self.lnames = []
@@ -415,6 +431,7 @@ class DeserializedModule:
         self.groups = []
         self.publics = []
         self.externals = []
+        self.data = []
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
@@ -457,10 +474,10 @@ class DeserializedModule:
                 self.segments.append(segment)
             elif isinstance(src, ExtDef):
                 extdef = {"name": str(src.name.body),
-                          "type": src.obj_type
                           }
                 if src.obj_type and self.typedefs:
-                    obj_type = self.typedefs[src.obj_type - 1]
+                    extdef["type"] = self.typedefs[src.obj_type - 1]
+                self.externals.append(extdef)
             elif rec.rectype == RecordType.LNAMES:
                 self.lnames.extend([n.body for n in rec.body])
             elif isinstance(src, LinNum):
@@ -474,6 +491,17 @@ class DeserializedModule:
                     linenums["Locatability"] = "physical"
                 else:
                     linenums["Locatability"] = "logical"
+                self.linenums = linenums
+            elif isinstance(src, LEData):
+                datum = {"locateability": "logical",
+                         "form": "enumerated",
+                         "offset": src.offset,
+                         "body": src.body,
+                         }
+                if src.seg_ind and self.segments:
+                    # noinspection PyTypeChecker
+                    datum["segment"] = self.segments[src.seg_ind - 1]
+                self.data.append(datum)
 
 
 scroll_path = Path(sys.argv[1])
