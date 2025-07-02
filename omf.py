@@ -391,12 +391,13 @@ class Module:
         return self.val
 
 
+@dataclass
 class DeserializedModule:
-    lnames: tuple[str, ...]
-    typedefs: tuple[str, ...]
-    segments: list[SegDef]
-    groups: list[GroupDef]
-    publics: list[dict]
+    lnames: tuple[str, ...] = ''
+    typedefs: tuple[str, ...] = ()
+    segments: list[SegDef] = ()
+    groups: list[GroupDef] = ()
+    publics: list[dict] = ()
 
     def __init__(self, module: list[Record]):
         self.groups = []
@@ -413,6 +414,7 @@ class DeserializedModule:
                     for pub in src.body)
                 if src.base.grp_ind and self.groups:
                     for pub in pubdef:
+                        # noinspection PyTypeChecker
                         pub["group"] = self.groups[src.base.grp_ind - 1]
                 self.publics.extend(pubdef)
 
@@ -430,4 +432,5 @@ for scroll in scroll_path.iterdir():
     module = Module(content)
     with open(codex_path, "w") as f:
         f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
+    print(DeserializedModule(module()))
 
