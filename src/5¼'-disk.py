@@ -33,8 +33,8 @@ class FileEntry:
     ext: str  # 3
     # flags  # 1
     # 2
-    create_datetime: datetime.datetime  # 4  # not in 1.0
-    access_date: datetime.date  # 2  # not in 1.0
+    create_datetime: datetime.datetime  # 4 # not in 1.0
+    access_date: datetime.date  # 2 # not in 1.0
     # 2
     write_datetime: datetime.datetime  # 4
     first_cluster: int  # 2
@@ -515,6 +515,7 @@ class Fat(SeqWrapper):
         fili = []
         empty = []
         while unchecked:
+            rem = ()
             pointer = min(unchecked)
             try:
                 file = self.file_locate(pointer)
@@ -705,7 +706,7 @@ def ms_time(call: bytes) -> dict[str, int]:
     return {'second': 2 * call[0] % 0x20,  # 0..5
             'minute': call[0] // 0x20 + 8 * (call[1] % 8),  # 5..11
             'hour'  : hour - 1 if hour else hour}
-    # hour need to be converted from 0..24 (0 being dummy) on fat to 0..23 on python
+    # hour needs to be converted from 0..24 (0 being dummy) on fat to 0..23 on python
 
 
 def ms_date(call: bytes) -> dict[str, int]:
@@ -716,7 +717,7 @@ def ms_date(call: bytes) -> dict[str, int]:
 
 def to_ms_time(call: datetime.datetime | datetime.date) -> bytes:
     back = b''
-    # in case of doubt, preserve 0 input (only forces hour, day and month to 0 instead of 1)
+    # in case of doubt, preserve 0 inputs (only forces hour, day and month to 0 instead of 1)
     if isinstance(call, datetime.datetime):
         back += (call.second // 2 + 0x20 * call.minute + 0x800 * (call.hour + 1)).to_bytes(2, 'little')
         # if not any((call.second, call.minute, call.hour)):
@@ -780,7 +781,7 @@ def entry_from_file(file_nom: str) -> FileEntry:
     time_structi = tuple(time.localtime(second) for second in (create_second, access_second, write_second))
     yeari = tuple((1980 +  (s.tm_year + 4) % 16) for s in time_structi)
     # the modal 16 year since 1980. 1980 is 12 in mode 16, so we need to add 4,
-    # to put the year on the right place in the cycle.
+    # to put the year in the right place in the cycle.
     create_datetime, write_datetime  = ((strct.tm_mon, strct.tm_mday,
                                          strct.tm_hour, strct.tm_min, strct.tm_sec)
                                         for strct in (time_structi[0], time_structi[2]))

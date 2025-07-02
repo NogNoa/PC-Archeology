@@ -86,7 +86,7 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 
 def draw_1bit_font(call: bytes) -> Image.Image:
-    image = Image.new("1", (0x100, len(scroll)// 0x20))
+    image = Image.new("1", (0x100, len(scroll) // 0x20))
     pixels = image.load()
     for byte_i, byte in enumerate(call):
         letter_i = byte_i // 8
