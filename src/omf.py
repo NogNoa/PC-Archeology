@@ -102,6 +102,7 @@ class NUMBER(Subrecord):
 @dataclass
 class Thread(Subrecord):
     thread_type: str = ''
+    z: bool = False
     index: int = 0
     method: int = 0
     thred: int = 0
@@ -109,10 +110,9 @@ class Thread(Subrecord):
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         trd_dat = val[0]
-        try:
-            assert not trd_dat & 0b1010_0000
-        except AssertionError:
-            print(trd_dat & 0b1010_0000, file=sys.stderr)
+        z = bool(trd_dat & 0b10_0000)
+        if z:
+            print("z set", trd_dat, file=sys.stderr)
         if trd_dat & 0x40:
             thread_type = 'frame'
             index, val = index_create(val[1:])
@@ -122,23 +122,25 @@ class Thread(Subrecord):
             val = val[3:]
         method = (trd_dat >> 2) & 7
         thred = trd_dat & 3
-        return cls(thread_type, index, method, thred), val
+        return cls(thread_type, z, index, method, thred), val
 
 
 @dataclass
 class Locat:
     relativity: str
     target_displacement_length: int
-    loc: str
+    loc: str | int
     data_record_offset: int
 
     def __init__(self, val: bytes) -> None:
         assert val[0] & 0x80
         self.relativity = "segment" if val[0] & 0x40 else "self"
         self.target_displacement_length = 2 + bool(val[0] & 0x20)
-        loc = (val[0] >> 2) & 7
-        assert loc <= 4
-        self.loc = ("lobyte", "offset", "base", "pointer", "hibyte")[loc]
+        self.loc = (val[0] >> 2) & 7
+        if self.loc <= 5:
+            self.loc = ("lobyte", "offset", "base", "pointer", "hibyte", "loader-resolved offset")[self.loc]
+        else:
+            print("unknown loc", self.loc, file=sys.stderr)
         self.data_record_offset = ((val[0] & 3) << 8) | val[1]
 
 
@@ -151,9 +153,9 @@ class FixDat:
     target: int
 
     def __init__(self, val: int) -> None:
-        self.frame_spec = val & 0x80
-        self.target_spec = val & 8
-        self.no_target_displacement = val & 4
+        self.frame_spec = bool(val & 0x80)
+        self.target_spec = bool(val & 8)
+        self.no_target_displacement = bool(val & 4)
         self.frame = (val >> 4) & 7
         self.target = val & 3
 
