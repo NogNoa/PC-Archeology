@@ -102,20 +102,41 @@ class NUMBER(Subrecord):
 class Fixupp(Subrecord):
 
     @classmethod
-    def create(cls, *args):
-        pass
+    def create(cls, val: bytes) -> tuple[Self, bytes]:
+        assert val[0] & 0x80
+        relativity = "segment" if val[0] & 0x40 else "self"
+        target_displacement_length = 2 + bool(val[0] & 0x20)
+        loc = (val[0] >> 2) & 7
+        assert loc <= 4
+        loc = ("lobyte", "offset", "base", "pointer", "hibyte")[loc]
+        data = ((val[0] & 3) << 8) | (val[1] >> 7)
+        record_offset = val[1] & 0x7F
 
 
+@dataclass
 class Thread(Subrecord):
+    thread_type: str
+    index: int
+    frame_numb: Optional[int]
+    method: int
+    thred: int
 
     @classmethod
-    def create(cls, *args):
-        trd_dat = args[0]
+    def create(cls, val: bytes) -> tuple[Self, bytes]:
+        trd_dat = val[0]
         assert not trd_dat & 0b1010_0000
-        thread_type = 'frame' if trd_dat & 0x40 else 'target'
+        if trd_dat & 0x40:
+            thread_type = 'frame'
+            index, val = index_create(val[1:])
+            frame_numb = None
+        else:
+            thread_type = 'target'
+            frame_numb = val[2] << 8 | val[1]
+            val = val[3:]
+            index = 0
         method = (trd_dat >> 2) & 7
         thred = trd_dat & 3
-
+        return cls(thread_type, index, frame_numb, method, thred), val
 
 
 @dataclass
@@ -152,7 +173,7 @@ class ModEnd(Subrecord):
         self.has_start_addrs = bool(mattr & 1)
         if self.has_start_addrs:
             if self.is_logical:
-                self.start_addr = Fixupp(body[1:])
+                self.start_addr = Fixupp.create(body[1:])
             else:
                 assert len(body) == 5
                 segment = body[2] << 8 | body[1]
@@ -378,6 +399,7 @@ class IteratedBlock:
             body = body[4:]
             for _ in range(self.blocks):
                 blck, body = IteratedBlock.create(body)
+                # noinspection PyTypeChecker
                 self.content.append(blck)
         return self, body
 
