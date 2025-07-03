@@ -99,27 +99,12 @@ class NUMBER(Subrecord):
         return repr(self.val)
 
 
-class Fixupp(Subrecord):
-
-    @classmethod
-    def create(cls, val: bytes) -> tuple[Self, bytes]:
-        assert val[0] & 0x80
-        relativity = "segment" if val[0] & 0x40 else "self"
-        target_displacement_length = 2 + bool(val[0] & 0x20)
-        loc = (val[0] >> 2) & 7
-        assert loc <= 4
-        loc = ("lobyte", "offset", "base", "pointer", "hibyte")[loc]
-        data = ((val[0] & 3) << 8) | (val[1] >> 7)
-        record_offset = val[1] & 0x7F
-
-
 @dataclass
 class Thread(Subrecord):
-    thread_type: str
-    index: int
-    frame_numb: Optional[int]
-    method: int
-    thred: int
+    thread_type: str = ''
+    index: int = 0
+    method: int = 0
+    thred: int = 0
 
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
@@ -128,15 +113,69 @@ class Thread(Subrecord):
         if trd_dat & 0x40:
             thread_type = 'frame'
             index, val = index_create(val[1:])
-            frame_numb = None
         else:
             thread_type = 'target'
-            frame_numb = val[2] << 8 | val[1]
+            index = val[2] << 8 | val[1]
             val = val[3:]
-            index = 0
         method = (trd_dat >> 2) & 7
         thred = trd_dat & 3
-        return cls(thread_type, index, frame_numb, method, thred), val
+        return cls(thread_type, index, method, thred), val
+
+
+@dataclass
+class Locat:
+    relativity: str
+    target_displacement_length: int
+    loc: str
+    data_record_offset: int
+
+    def __init__(self, val: bytes) -> None:
+        assert val[0] & 0x80
+        self.relativity = "segment" if val[0] & 0x40 else "self"
+        self.target_displacement_length = 2 + bool(val[0] & 0x20)
+        loc = (val[0] >> 2) & 7
+        assert loc <= 4
+        self.loc = ("lobyte", "offset", "base", "pointer", "hibyte")[loc]
+        self.data_record_offset = ((val[0] & 3) << 8) | val[1]
+
+
+@dataclass
+class FixDat:
+    frame_spec: bool
+    target_spec: bool
+    no_target_displacement: bool
+    frame: int
+    target: int
+
+    def __init__(self, val: int) -> None:
+        self.frame_spec = val & 0x80
+        self.target_spec = val & 8
+        self.no_target_displacement = val & 4
+        self.frame = (val >> 4) & 7
+        self.target = val & 3
+
+
+@dataclass
+class Fixupp(Subrecord):
+    locat: Locat
+    fix_dat: FixDat
+    frame_datum: Optional[int]
+    target_datum: Optional[int]
+    target_displacement: Optional[int]
+
+    @classmethod
+    def create(cls, val: bytes, thread: Thread) -> tuple[Self, bytes]:
+        frame_datum = target_datum = target_displacement = None
+        locat = Locat(val[:2])
+        fix_dat = FixDat(val[2])
+        val = val[3:]
+        if not fix_dat.frame_spec & thread.method not in range(4, 7):
+            frame_datum, val = val[1] << 8 | val[0], val[2:]
+        if not fix_dat.target_spec:
+            target_datum, val = val[1] << 8 | val[0], val[2:]
+        if not fix_dat.no_target_displacement:
+            target_displacement, val = val[1] << 8 | val[0], val[2:]
+        return cls(locat, fix_dat, frame_datum, target_datum, target_displacement), val
 
 
 @dataclass
@@ -173,7 +212,8 @@ class ModEnd(Subrecord):
         self.has_start_addrs = bool(mattr & 1)
         if self.has_start_addrs:
             if self.is_logical:
-                self.start_addr = Fixupp.create(body[1:])
+                self.start_addr, body = Fixupp.create(body[1:], Thread())
+                assert not body
             else:
                 assert len(body) == 5
                 segment = body[2] << 8 | body[1]
@@ -490,9 +530,14 @@ class Record:
             body = LIData(val)
         elif rectype == RecordType.FIXUPP:
             body = []
+            thread = Thread()
             while val:
                 head = val[0]
-                block, val = Fixupp.create(val) if head & 0x80 else Thread.create(val)
+                if head & 0x80:
+                    block, val = Fixupp.create(val, thread)
+                else:
+                    block, val = Thread.create(val)
+                    thread = block
                 body.append(block)
         else:
             print(rectype)
