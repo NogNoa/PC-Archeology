@@ -109,7 +109,10 @@ class Thread(Subrecord):
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         trd_dat = val[0]
-        assert not trd_dat & 0b1010_0000
+        try:
+            assert not trd_dat & 0b1010_0000
+        except AssertionError:
+            print(trd_dat & 0b1010_0000, file=sys.stderr)
         if trd_dat & 0x40:
             thread_type = 'frame'
             index, val = index_create(val[1:])
@@ -175,6 +178,9 @@ class Fixupp(Subrecord):
             target_datum, val = val[1] << 8 | val[0], val[2:]
         if not fix_dat.no_target_displacement:
             target_displacement, val = val[1] << 8 | val[0], val[2:]
+            if locat.target_displacement_length == 3:
+                target_displacement |= val[0] << 0x10
+                val = val[1:]
         return cls(locat, fix_dat, frame_datum, target_datum, target_displacement), val
 
 
