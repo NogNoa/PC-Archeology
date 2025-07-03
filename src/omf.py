@@ -101,8 +101,21 @@ class NUMBER(Subrecord):
 
 class Fixupp(Subrecord):
 
-    def __init__(self, *args):
+    @classmethod
+    def create(cls, *args):
         pass
+
+
+class Thread(Subrecord):
+
+    @classmethod
+    def create(cls, *args):
+        trd_dat = args[0]
+        assert not trd_dat & 0b1010_0000
+        thread_type = 'frame' if trd_dat & 0x40 else 'target'
+        method = (trd_dat >> 2) & 7
+        thred = trd_dat & 3
+
 
 
 @dataclass
@@ -453,7 +466,14 @@ class Record:
             body = LEData(val)
         elif rectype in {RecordType.LIDATA, RecordType.LIDATA2}:
             body = LIData(val)
+        elif rectype == RecordType.FIXUPP:
+            body = []
+            while val:
+                head = val[0]
+                block, val = Fixupp.create(val) if head & 0x80 else Thread.create(val)
+                body.append(block)
         else:
+            print(rectype)
             body = val
         return body
 
@@ -550,11 +570,11 @@ class DeserializedModule:
                 else:
                     linenums["Locatability"] = "logical"
                 self.linenums = linenums
-            elif isinstance(src, LEData):
+            elif isinstance(src, LEData | LIData):
                 datum = {"locateability": "logical",
-                         "form": "enumerated",
                          "offset": src.offset,
                          "body": src.body,
+                         "form": {LEData: "enumerated", LIData: "iterated"}[type(src)]
                          }
                 if src.seg_ind and self.segments:
                     # noinspection PyTypeChecker
