@@ -1,3 +1,4 @@
+import argparse
 import math
 import sys
 
@@ -36,24 +37,7 @@ def MDA_pallete(index: int) -> int:
     return 0xAA * bool(index & 2) + 0x55 * bool(index & 1)
 
 
-def draw_message(call: bytes) -> Image.Image:
-    image = Image.new("RGB", (4 * MESG_LINE_SZ, math.ceil(len(scroll) / MESG_LINE_SZ)))
-    pixels = image.load()
-    y = 0
-    while call:
-        x = 0
-        for byte in call[:MESG_LINE_SZ]:
-            pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
-            pix_quad = (p & 3 for p in pix_quad)
-            for pl, p in enumerate(pix_quad):
-                pixels[x + pl, y] = CGA_mode4_pallete_1(p)
-            x += 4
-        call = call[MESG_LINE_SZ:]
-        y += 1
-    return image
-
-
-def draw_CG(call: bytes, width_pix=LINE_PIX, interlaced=True) -> Image.Image:
+def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     line_sz = math.ceil(width_pix / 4)
     image = Image.new("RGB", (width_pix, math.ceil(len(scroll) / line_sz) + 1))
     pixels = image.load()
@@ -104,15 +88,20 @@ def draw_1bit_font(call: bytes) -> Image.Image:
                 print(f"Error: draw to [{x}, {y}]")
     return image
 
-
-scroll_nom = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("scroll")
+parser.add_argument("action")
+parser.add_argument("line_length", type=int, default=LINE_PIX, nargs="?")
+parser.add_argument("-p", "--progrssive", action="store_true")
+args = parser.parse_args()
+scroll_nom = args.scroll
 with open(scroll_nom, "rb") as file:
     scroll = file.read()
 
-if sys.argv[2] == "lm":
-    image = draw_message(scroll)
-elif sys.argv[2] == "cg":
-    image = draw_CG(scroll)
+if args.action == "cg":
+    image = draw_CG(scroll, args.line_length, not args.progrssive)
+elif args.action == "lm":
+    image = draw_CG(scroll, 0x80, False)
 elif sys.argv[2] == "ft":
     image = draw_1bit_font(scroll)
 else:

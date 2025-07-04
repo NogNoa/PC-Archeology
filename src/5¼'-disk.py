@@ -881,10 +881,6 @@ if __name__ == "__main__":
         print(f"empty {emp}")
         if args.action.startswith("extract"):
             disk.fili_extract()
-        # for arg in sys.argv[2:]:
-        #     disk.file_extract(arg)
-
-        # disk.file_add(sys.argv[2])
         if args.action.startswith("create"):
             folder_to_disk(disk, args.folder, 0xff)
 
