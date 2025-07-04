@@ -39,14 +39,14 @@ def MDA_pallete(index: int) -> int:
 
 def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     line_sz = math.ceil(width_pix / 4)
-    image = Image.new("RGB", (width_pix, math.ceil(len(scroll) / line_sz) + 1))
+    image = Image.new("RGB", (width_pix, math.ceil(len(call) / line_sz) + 1))
     pixels = image.load()
     for byte_i, byte in enumerate(call):
+        field_i = byte_i // FIELD_SZ
         byte_i %= FIELD_SZ
         x = 4 * (byte_i % line_sz)
         y = byte_i // line_sz
         if interlaced:
-            field_i = byte_i // FIELD_SZ
             y = 2 * y + field_i
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
