@@ -37,7 +37,7 @@ def MDA_pallete(index: int) -> int:
 
 
 def draw_message(call: bytes) -> Image.Image:
-    image = Image.new("RGB", (4 * MESG_LINE_SZ, 2 * math.ceil(len(scroll) / MESG_LINE_SZ)))
+    image = Image.new("RGB", (4 * MESG_LINE_SZ, math.ceil(len(scroll) / MESG_LINE_SZ)))
     pixels = image.load()
     y = 0
     while call:
@@ -49,19 +49,21 @@ def draw_message(call: bytes) -> Image.Image:
                 pixels[x + pl, y] = CGA_mode4_pallete_1(p)
             x += 4
         call = call[MESG_LINE_SZ:]
-        y += 2
+        y += 1
     return image
 
 
-def draw_CG(call: bytes, width_pix=LINE_PIX) -> Image.Image:
+def draw_CG(call: bytes, width_pix=LINE_PIX, interlaced=True) -> Image.Image:
     line_sz = math.ceil(width_pix / 4)
     image = Image.new("RGB", (width_pix, math.ceil(len(scroll) / line_sz) + 1))
     pixels = image.load()
     for byte_i, byte in enumerate(call):
-        field_i = byte_i // FIELD_SZ
         byte_i %= FIELD_SZ
         x = 4 * (byte_i % line_sz)
-        y = 2 * (byte_i // line_sz) + field_i
+        y = byte_i // line_sz
+        if interlaced:
+            field_i = byte_i // FIELD_SZ
+            y = 2 * y + field_i
         pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
         pix_quad = (p & 3 for p in pix_quad)
         for pixel_i, p in enumerate(pix_quad):
