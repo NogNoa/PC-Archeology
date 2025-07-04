@@ -37,7 +37,7 @@ def MDA_pallete(index: int) -> int:
 
 
 def draw_message(call: bytes) -> Image.Image:
-    image = Image.new("RGB", (4 * MESG_LINE_SZ, math.ceil(len(scroll) / MESG_LINE_SZ)))
+    image = Image.new("RGB", (4 * MESG_LINE_SZ, 2 * math.ceil(len(scroll) / MESG_LINE_SZ)))
     pixels = image.load()
     y = 0
     while call:
@@ -49,7 +49,7 @@ def draw_message(call: bytes) -> Image.Image:
                 pixels[x + pl, y] = CGA_mode4_pallete_1(p)
             x += 4
         call = call[MESG_LINE_SZ:]
-        y += 1
+        y += 2
     return image
 
 
