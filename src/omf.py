@@ -115,11 +115,15 @@ class Thread(Subrecord):
             print("z set", trd_dat, file=sys.stderr)
         thread_type = 'frame' if trd_dat & 0x40 else 'target'
         method = (trd_dat >> 2) & 7
-        if thread_type != 'frame' or method not in range(4, 7):
-            index, val = index_create(val[1:])
-        else:
+        assert not (method == 7 and thread_type == 'frame')
+        if method in {3, 7}:
+            index = val[2] << 8 | val[1]
+            val = val[3:]
+        elif thread_type == 'frame' and method in range(4, 7):
             index = None
             val = val[1:]
+        else:
+            index, val = index_create(val[1:])
         thred = trd_dat & 3
         return cls(thread_type, z, method, thred, index), val
 
