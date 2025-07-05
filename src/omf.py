@@ -103,9 +103,9 @@ class NUMBER(Subrecord):
 class Thread(Subrecord):
     thread_type: str = ''
     z: bool = False
-    index: int = 0
     method: int = 0
     thred: int = 0
+    index: Optional[int] = None
 
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
@@ -113,16 +113,15 @@ class Thread(Subrecord):
         z = bool(trd_dat & 0b10_0000)
         if z:
             print("z set", trd_dat, file=sys.stderr)
-        if trd_dat & 0x40:
-            thread_type = 'frame'
+        thread_type = 'frame' if trd_dat & 0x40 else 'target'
+        method = (trd_dat >> 2) & 7
+        if thread_type != 'frame' or method not in range(4, 7):
             index, val = index_create(val[1:])
         else:
-            thread_type = 'target'
-            index = val[2] << 8 | val[1]
-            val = val[3:]
-        method = (trd_dat >> 2) & 7
+            index = None
+            val = val[1:]
         thred = trd_dat & 3
-        return cls(thread_type, z, index, method, thred), val
+        return cls(thread_type, z, method, thred, index), val
 
 
 @dataclass
@@ -579,6 +578,7 @@ class DeserializedModule:
     data: list[dict] = ()
 
     def __init__(self, module: tuple[Record, ...]):
+        self.name: str = ''
         self.lnames = []
         self.segments = []
         self.groups = []
@@ -588,7 +588,8 @@ class DeserializedModule:
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
-                group = {"descriptors": src.descriptors}
+                group = {"name": '',
+                         "descriptors": src.descriptors}
                 if src.name_index and self.lnames:
                     # noinspection PyTypeChecker
                     group["name"] = self.lnames[src.name_index - 1]
@@ -655,6 +656,11 @@ class DeserializedModule:
                     # noinspection PyTypeChecker
                     datum["segment"] = self.segments[src.seg_ind - 1]
                 self.data.append(datum)
+            elif isinstance(src, NAME):
+                if self.name not in locals():
+                    self.name = src.body.decode("ascii")
+                else:
+                    self.path = src.body.decode("ascii")
 
 
 scroll_path = Path(sys.argv[1])
