@@ -598,7 +598,7 @@ class DeserializedModule:
                 self.groups.append(group)
             elif isinstance(src, PubDef):
                 pubdef = {"publics": tuple(
-                    {'name': str(pub.name.body),
+                    {'name': pub.name.body.decode("ascii"),
                      'ofsset' : pub.offset
                      }
                     for pub in src.body)
@@ -622,17 +622,17 @@ class DeserializedModule:
                 if self.lnames:
                     for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
                         if name_ind:
-                            segment["name"] += " " + str(self.lnames[name_ind - 1])
+                            segment["name"] += " " + self.lnames[name_ind - 1]
                 segment["name"] = segment["name"].strip()
                 self.segments.append(segment)
             elif isinstance(src, ExtDef):
-                extdef = {"name": str(src.name.body),
+                extdef = {"name": src.name.body.decode("ascii"),
                           }
                 if src.obj_type and self.typedefs:
                     extdef["type"] = self.typedefs[src.obj_type - 1]
                 self.externals.append(extdef)
             elif rec.rectype == RecordType.LNAMES:
-                self.lnames.extend([n.body for n in rec.body])
+                self.lnames.extend([n.body.decode("ascii") for n in rec.body])
             elif isinstance(src, LinNum):
                 linenums = {}
                 if src.base.grp_ind and self.groups:
