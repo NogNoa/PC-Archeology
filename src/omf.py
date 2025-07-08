@@ -138,29 +138,37 @@ class Locat:
     def __init__(self, val: bytes) -> None:
         assert val[0] & 0x80
         self.relativity = "segment" if val[0] & 0x40 else "self"
-        self.target_displacement_length = 2 + bool(val[0] & 0x20)
+        assert not val[0] & 0x20  # only used in 32-bit object files
         self.loc = (val[0] >> 2) & 7
         if self.loc <= 5:
             self.loc = ("lobyte", "offset", "base", "pointer", "hibyte", "loader-resolved offset")[self.loc]
         else:
             print("unknown loc", self.loc, file=sys.stderr)
         self.data_record_offset = ((val[0] & 3) << 8) | val[1]
+        assert self.data_record_offset < 0x400
 
 
 @dataclass
 class FixDat:
-    frame_spec: bool
-    target_spec: bool
+    frame_by_thread: bool
+    target_by_thread: bool
     no_target_displacement: bool
-    frame: int
+    frame: Optional[int]
     target: int
 
     def __init__(self, val: int) -> None:
-        self.frame_spec = bool(val & 0x80)
-        self.target_spec = bool(val & 8)
+        self.frame_by_thread = bool(val & 0x80)
+        self.target_by_thread = bool(val & 8)
         self.no_target_displacement = bool(val & 4)
         self.frame = (val >> 4) & 7
+        if self.frame_by_thread:
+            assert not self.frame & 4  # refer to most recent frame thread with this number
+        else:
+            self.method = ('f', self.frame)
+            self.frame = None
         self.target = val & 3
+        if not self.target_by_thread:
+            self.method = ('t', val & 7)
 
 
 @dataclass
@@ -172,14 +180,15 @@ class Fixupp(Subrecord):
     target_displacement: Optional[int]
 
     @classmethod
-    def create(cls, val: bytes, thread: Thread) -> tuple[Self, bytes]:
+    def create(cls, val: bytes, thread: Thread = None) -> tuple[Self, bytes]:
         frame_datum = target_datum = target_displacement = None
         locat = Locat(val[:2])
         fix_dat = FixDat(val[2])
         val = val[3:]
-        if not fix_dat.frame_spec & thread.method not in range(4, 7):
+        assert not fix_dat.frame_by_thread or thread is not None
+        if not fix_dat.frame_by_thread:
             frame_datum, val = val[1] << 8 | val[0], val[2:]
-        if not fix_dat.target_spec:
+        if not fix_dat.target_by_thread:
             target_datum, val = val[1] << 8 | val[0], val[2:]
         if not fix_dat.no_target_displacement:
             target_displacement, val = val[1] << 8 | val[0], val[2:]
@@ -223,7 +232,7 @@ class ModEnd(Subrecord):
         self.has_start_addrs = bool(mattr & 1)
         if self.has_start_addrs:
             if self.is_logical:
-                self.start_addr, body = Fixupp.create(body[1:], Thread())
+                self.start_addr, body = Fixupp.create(body[1:])
                 assert not body
             else:
                 assert len(body) == 5
@@ -541,7 +550,7 @@ class Record:
             body = LIData(val)
         elif rectype == RecordType.FIXUPP:
             body = []
-            thread = Thread()
+            thread = None
             while val:
                 head = val[0]
                 if head & 0x80:
