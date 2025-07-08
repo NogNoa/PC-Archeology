@@ -128,6 +128,9 @@ class Thread(Subrecord):
         return cls(thread_type, z, method, thred, index), val
 
 
+thread_dict = dict[str, dict[int, Thread]]
+
+
 @dataclass
 class Locat:
     relativity: str
@@ -159,17 +162,11 @@ class FixDat:
     def __init__(self, val: int) -> None:
         self.frame_by_thread = bool(val & 0x80)
         self.target_by_thread = bool(val & 8)
-        self.no_target_displacement = bool(val & 4)
         self.frame = (val >> 4) & 7
-        if self.frame_by_thread:
-            assert not self.frame & 4  # refer to most recent frame thread with this number
-        else:
-            self.method = ('f', self.frame)
-            self.frame = None
-        self.target = val & 3
-        if not self.target_by_thread:
-            self.method = ('t', val & 7)
-
+        self.target = val & 7
+        self.no_target_displacement = bool(self.target & 4)
+        assert not self.frame_by_thread or not self.frame & 4
+        assert not self.target_by_thread or not self.no_target_displacement
 
 @dataclass
 class Fixupp(Subrecord):
@@ -180,21 +177,25 @@ class Fixupp(Subrecord):
     target_displacement: Optional[int]
 
     @classmethod
-    def create(cls, val: bytes, thread: Thread = None) -> tuple[Self, bytes]:
+    def create(cls, val: bytes, threads: thread_dict) -> tuple[Self, bytes]:
         frame_datum = target_datum = target_displacement = None
         locat = Locat(val[:2])
         fix_dat = FixDat(val[2])
         val = val[3:]
-        assert not fix_dat.frame_by_thread or thread is not None
-        if not fix_dat.frame_by_thread:
+        if fix_dat.frame_by_thread:
+            frame_method = threads["frame"][fix_dat.frame].method  # refer to most recent frame thread with this number
+        else:
+            frame_method = fix_dat.frame
+        if fix_dat.target_by_thread:
+            target_method = threads["target"][fix_dat.target].method  # refer to most recent target thread with this number
+        else:
+            target_method = fix_dat.target
+        if not fix_dat.frame_by_thread and not frame_method & 4:
             frame_datum, val = val[1] << 8 | val[0], val[2:]
         if not fix_dat.target_by_thread:
             target_datum, val = val[1] << 8 | val[0], val[2:]
         if not fix_dat.no_target_displacement:
             target_displacement, val = val[1] << 8 | val[0], val[2:]
-            if locat.target_displacement_length == 3:
-                target_displacement |= val[0] << 0x10
-                val = val[1:]
         return cls(locat, fix_dat, frame_datum, target_datum, target_displacement), val
 
 
