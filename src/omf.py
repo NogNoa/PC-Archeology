@@ -62,6 +62,28 @@ class DescriptorType(Enum):
     SI = 0xFF
 
 
+class CommClass(Enum):
+    Translator = 0
+    IntelCopyright = 1
+    MsDosVer = 0x9c
+    MemoryModel = 0x9d
+    DOSSEG = 0x9e
+    LibIndicator = 0x9f
+    OmfExtens = 0xa0
+    SymoblDebugInfo = 0xA1
+    LinkPass = 0xA2
+    LIBMOD = 0xA3
+    EXESTR = 0xA4
+    INCERR = 0xA6
+    NOPAD = 0xA7
+    WKEXT = 0xA8
+    LZEXT = 0xA9
+    PHARLAP = 0xAA
+    IPADATA = 0xAE
+    IDMDLL = 0xAF
+
+
+
 def index_create(body: bytes) -> tuple[int, bytes]:
     val = body[0]
     if val & 0x80:
@@ -83,20 +105,6 @@ class NAME(Subrecord):
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         length = val[0]
         return cls(length, val[1:length + 1]), val[length + 1:]
-
-
-class NUMBER(Subrecord):
-    val: int  # 32-bit
-
-    def __init__(self, body):
-        assert len(body) == 4
-        self.val = body[3] << 0x18 | body[2] << 0x10 | body[1] << 8 | body[0]
-
-    def __str__(self):
-        return str(self.val)
-
-    def __repr__(self):
-        return repr(self.val)
 
 
 @dataclass
@@ -196,7 +204,7 @@ class Fixupp(Subrecord):
 
 @dataclass
 class Comment(Subrecord):
-    com_class: int  # byte
+    com_class: CommClass  | int # byte
     is_purgable: bool
     to_list: bool
     class_is_reserverd: bool
@@ -209,6 +217,8 @@ class Comment(Subrecord):
         self.to_list = not (head & 0x40)
         self.com_class = body[1]
         self.class_is_reserverd = not (self.com_class & 0x80)
+        if self.com_class not in range(2, 0x9c) and self.com_class < 0xc0:
+            self.com_class = CommClass(self.com_class)
         self.body = body[2:]
 
 
@@ -707,5 +717,6 @@ for scroll in scroll_path.iterdir():
     module = Module(content)
     with open(codex_path, "w") as f:
         f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
-    print(str(DeserializedModule(module())).replace(', ', ',\t'))
+    print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
+    # print(str(DeserializedModule(module())).replace(', ', ',\t'))
 
