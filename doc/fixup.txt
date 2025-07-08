@@ -1,0 +1,23 @@
+.base 16
+
+fixup = {location, mode, target, frame}
+fixup.location = {place, type}
+fixup.location.type = pointer | base | offset | hibyte | lobyte
+
+\all p::pointer \exist b::base, o::offset; p = b << 10 | o
+\all o::offset \exist h:hibyte, l::lobyte; o = h << 8 | l
+fixup.location.type -- FIXUP.LOCAT.LOC
+fixup.location.place -- FIXUP.LOCAT.DATA_RECORD_OFFSET
+
+fixup.mode = self-relative | segment-relative
+self-relative for jump-esque addressing modes, segment-relative for common addressing modes
+
+Target(x,d,m)
+
+(T0), (T4) x -- logical segment-index 
+(T1), (T5) x -- group index
+(T2), (T6) x -- external index
+(T3), (T7) x -- Frame Number
+Target(x,d,m): m \in 0..3 = x[d]
+Target(x,d,3) = x << 4 + d
+Target(x,d,m): m \in 4..8 = Target(x,0, m-4)

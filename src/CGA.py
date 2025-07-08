@@ -90,6 +90,7 @@ def draw_1bit_font(call: bytes) -> Image.Image:
                 print(f"Error: draw to [{x}, {y}]")
     return image
 
+
 parser = argparse.ArgumentParser()
 parser.add_argument("scroll")
 parser.add_argument("action")
@@ -110,3 +111,13 @@ else:
     raise ValueError
 
 image.save(f"{scroll_nom}.png")
+
+"""field_i = byte_i // FIELD_SZ
+hight = ceil(len(call) / line_sz) + 1
+line_sz = ceil(width_pix / 4)
+width_pix default LINE_PIX
+len(call) default 0x4000
+field_sz = len(call) // 2
+field_i = byte_i // (len(call) // 2)
+
+byte_i % (byte_i // (len(call) // 2))"""
