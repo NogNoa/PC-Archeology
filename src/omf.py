@@ -102,7 +102,6 @@ class NUMBER(Subrecord):
 @dataclass
 class Thread(Subrecord):
     thread_type: str = ''
-    z: bool = False
     method: int = 0
     thred: int = 0
     index: Optional[int] = None
@@ -110,9 +109,7 @@ class Thread(Subrecord):
     @classmethod
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         trd_dat = val[0]
-        z = bool(trd_dat & 0b10_0000)
-        if z:
-            print("z set", trd_dat, file=sys.stderr)
+        assert not trd_dat & 0x20
         thread_type = 'frame' if trd_dat & 0x40 else 'target'
         method = (trd_dat >> 2) & 7
         assert not (method == 7 and thread_type == 'frame')
@@ -125,7 +122,7 @@ class Thread(Subrecord):
         else:
             index, val = index_create(val[1:])
         thred = trd_dat & 3
-        return cls(thread_type, z, method, thred, index), val
+        return cls(thread_type, method, thred, index), val
 
 
 thread_dict = dict[str, dict[int, Thread]]
@@ -134,7 +131,6 @@ thread_dict = dict[str, dict[int, Thread]]
 @dataclass
 class Locat:
     relativity: str
-    target_displacement_length: int
     loc: str | int
     data_record_offset: int
 
@@ -168,6 +164,7 @@ class FixDat:
         assert not self.frame_by_thread or not self.frame & 4
         assert not self.target_by_thread or not self.no_target_displacement
 
+
 @dataclass
 class Fixupp(Subrecord):
     locat: Locat
@@ -177,23 +174,21 @@ class Fixupp(Subrecord):
     target_displacement: Optional[int]
 
     @classmethod
-    def create(cls, val: bytes, threads: thread_dict) -> tuple[Self, bytes]:
+    def create(cls, val: bytes) -> tuple[Self, bytes]:
         frame_datum = target_datum = target_displacement = None
         locat = Locat(val[:2])
         fix_dat = FixDat(val[2])
         val = val[3:]
-        if fix_dat.frame_by_thread:
-            frame_method = threads["frame"][fix_dat.frame].method  # refer to most recent frame thread with this number
-        else:
-            frame_method = fix_dat.frame
-        if fix_dat.target_by_thread:
-            target_method = threads["target"][fix_dat.target].method  # refer to most recent target thread with this number
-        else:
-            target_method = fix_dat.target
-        if not fix_dat.frame_by_thread and not frame_method & 4:
-            frame_datum, val = val[1] << 8 | val[0], val[2:]
+        if not fix_dat.frame_by_thread and not fix_dat.frame & 4:
+            if fix_dat.frame == 3:
+                frame_datum, val = val[1] << 8 | val[0], val[2:]
+            else:
+                frame_datum, val = index_create(val)
         if not fix_dat.target_by_thread:
-            target_datum, val = val[1] << 8 | val[0], val[2:]
+            if fix_dat.target & 3 == 3:
+                target_datum, val = val[1] << 8 | val[0], val[2:]
+            else:
+                target_datum, val = index_create(val)
         if not fix_dat.no_target_displacement:
             target_displacement, val = val[1] << 8 | val[0], val[2:]
         return cls(locat, fix_dat, frame_datum, target_datum, target_displacement), val
@@ -551,14 +546,12 @@ class Record:
             body = LIData(val)
         elif rectype == RecordType.FIXUPP:
             body = []
-            thread = None
             while val:
                 head = val[0]
                 if head & 0x80:
-                    block, val = Fixupp.create(val, thread)
+                    block, val = Fixupp.create(val)
                 else:
                     block, val = Thread.create(val)
-                    thread = block
                 body.append(block)
         else:
             print(rectype)
@@ -675,6 +668,17 @@ class DeserializedModule:
                     self.name = src.body.decode("ascii")
                 else:
                     self.path = src.body.decode("ascii")
+            # elif isinstance(src, Fixupp):
+            #     if fix_dat.frame_by_thread:
+            #         frame_method = threads["frame"][
+            #             fix_dat.frame].method  # refer to most recent frame thread with this number
+            #     else:
+            #         frame_method = fix_dat.frame
+            #     if fix_dat.target_by_thread:
+            #         target_method = threads["target"][
+            #             fix_dat.target].method  # refer to most recent target thread with this number
+            #     else:
+            #         target_method = fix_dat.target
 
 
 scroll_path = Path(sys.argv[1])

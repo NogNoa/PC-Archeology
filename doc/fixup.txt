@@ -21,3 +21,11 @@ Target(x,d,m)
 Target(x,d,m): m \in 0..3 = x[d]
 Target(x,d,3) = x << 4 + d
 Target(x,d,m): m \in 4..8 = Target(x,0, m-4)
+
+assert not self.frame_by_thread or not self.frame & 4
+if not fix_dat.frame_by_thread and not frame_method & 4:
+frame_method = thread.methof if fix_dat.frame_by_thread else fix_dat.frame
+fbt fd&4 fm fm&4    if
+F   F    fd F       T
+F   T    fd T       F
+T   F    tf P       F
