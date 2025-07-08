@@ -134,10 +134,13 @@ class Locat:
     def __init__(self, val: bytes) -> None:
         assert val[0] & 0x80
         self.relativity = "segment" if val[0] & 0x40 else "self"
-        assert not val[0] & 0x20  # only used in 32-bit object files
+        if val[0] & 0x20:
+            pass
         self.loc = (val[0] >> 2) & 7
         if self.loc <= 5:
             self.loc = ("lobyte", "offset", "base", "pointer", "hibyte", "loader-resolved offset")[self.loc]
+        elif self.loc & 9:  # newer expanion
+            self.loc = ("32_offset", "48_pointer", "32_loader-resolved offset")[self.loc ^ 8 >> 1]
         else:
             print("unknown loc", self.loc, file=sys.stderr)
         self.data_record_offset = ((val[0] & 3) << 8) | val[1]
@@ -588,10 +591,12 @@ class DeserializedModule:
     def __init__(self, module: tuple[Record, ...]):
         self.name: str = ''
         self.lnames = []
+        self.typedefs = ()
         self.segments = []
         self.groups = []
         self.publics = []
         self.externals = []
+        self.linenums = {}
         self.data = []
         self.threads = {"frame": {}, "target": {}}
         for rec in module:
@@ -702,5 +707,5 @@ for scroll in scroll_path.iterdir():
     module = Module(content)
     with open(codex_path, "w") as f:
         f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
-    print(DeserializedModule(module()))
+    print(str(DeserializedModule(module())).replace(', ', ',\t'))
 
