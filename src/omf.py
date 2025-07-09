@@ -83,7 +83,6 @@ class CommClass(Enum):
     IDMDLL = 0xAF
 
 
-
 def index_create(body: bytes) -> tuple[int, bytes]:
     val = body[0]
     if val & 0x80:
@@ -204,7 +203,7 @@ class Fixupp(Subrecord):
 
 @dataclass
 class Comment(Subrecord):
-    com_class: CommClass  | int # byte
+    com_class: CommClass  | int  # byte
     is_purgable: bool
     to_list: bool
     class_is_reserverd: bool
@@ -599,8 +598,17 @@ class DeserializedModule:
     threads: thread_dict
 
     def __init__(self, module: tuple[Record, ...]):
-        self.name: str = ''
-        self.lnames = []
+        rec, module = module[0], module[1:]
+        assert rec.rectype in {RecordType.THEADR, RecordType.LHEADR}
+        assert isinstance(rec.body, NAME)
+        self.name = rec.body.body.decode("ascii")
+        rec, module = module[0], module[1:]
+        if isinstance(rec.body, NAME):
+            self.path = rec.body.body.decode("ascii")
+        rec, module = module[0], module[1:]
+        assert rec.rectype == RecordType.LNAMES
+        assert isinstance(rec.body, list)
+        self.lnames = [n.body.decode("ascii") for n in rec.body]
         self.typedefs = ()
         self.segments = []
         self.groups = []
@@ -617,9 +625,6 @@ class DeserializedModule:
                 if src.name_index and self.lnames:
                     # noinspection PyTypeChecker
                     group["name"] = self.lnames[src.name_index - 1]
-                else:
-                    # noinspection PyTypeChecker
-                    group["name"] = ''
                 self.groups.append(group)
             elif isinstance(src, PubDef):
                 pubdef = {"publics": tuple(
@@ -656,8 +661,6 @@ class DeserializedModule:
                 if src.obj_type and self.typedefs:
                     extdef["type"] = self.typedefs[src.obj_type - 1]
                 self.externals.append(extdef)
-            elif rec.rectype == RecordType.LNAMES:
-                self.lnames.extend([n.body.decode("ascii") for n in rec.body])
             elif isinstance(src, LinNum):
                 linenums = {}
                 if src.base.grp_ind and self.groups:
@@ -680,11 +683,6 @@ class DeserializedModule:
                     # noinspection PyTypeChecker
                     datum["segment"] = self.segments[src.seg_ind - 1]
                 self.data.append(datum)
-            elif isinstance(src, NAME):
-                if self.name not in locals():
-                    self.name = src.body.decode("ascii")
-                else:
-                    self.path = src.body.decode("ascii")
             elif rec.rectype == RecordType.FIXUPP:
                 for block in src:
                     if isinstance(block, Thread):
