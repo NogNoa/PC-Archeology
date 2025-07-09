@@ -605,10 +605,22 @@ class DeserializedModule:
         rec, module = module[0], module[1:]
         if isinstance(rec.body, NAME):
             self.path = rec.body.body.decode("ascii")
-        rec, module = module[0], module[1:]
+            rec, module = module[0], module[1:]
         assert rec.rectype == RecordType.LNAMES
         assert isinstance(rec.body, list)
         self.lnames = [n.body.decode("ascii") for n in rec.body]
+        while True:
+            rec, module = module[0], module[1:]
+            src = rec.body
+            if not isinstance(src, SegDef):
+                break
+            segment = vars(src)
+            if self.lnames:
+                for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
+                    if name_ind:
+                        segment["name"] += " " + self.lnames[name_ind - 1]
+            segment["name"] = segment["name"].strip()
+            self.segments.append(segment)
         self.typedefs = ()
         self.segments = []
         self.groups = []
@@ -646,15 +658,6 @@ class DeserializedModule:
                 # noinspection PyTypeChecker
                 pubdef["Locatability"] = "logical" if src.base.frame_numb is None else "physical"
                 self.publics.append(pubdef)
-            elif isinstance(src, SegDef):
-                segment = {"name": '',
-                           "attrs": src.seg_attr}
-                if self.lnames:
-                    for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
-                        if name_ind:
-                            segment["name"] += " " + self.lnames[name_ind - 1]
-                segment["name"] = segment["name"].strip()
-                self.segments.append(segment)
             elif isinstance(src, ExtDef):
                 extdef = {"name": src.name.body.decode("ascii"),
                           }
@@ -715,6 +718,6 @@ for scroll in scroll_path.iterdir():
     module = Module(content)
     with open(codex_path, "w") as f:
         f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
-    print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
-    # print(str(DeserializedModule(module())).replace(', ', ',\t'))
+    # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
+    print(str(DeserializedModule(module())).replace(', ', ',\t'))
 
