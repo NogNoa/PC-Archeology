@@ -332,14 +332,11 @@ class LinNum(Subrecord):
 
 @dataclass
 class Attr(Subrecord):
-    locateability: str
-    alignment: str
-    is_physical: bool
-    named: bool
+    align_type: int
     combination: int
     page_resident: bool
-    child: PhysicalAddress | LoadtimeLocateable
     big: bool
+    child: PhysicalAddress | LoadtimeLocateable
 
     @classmethod
     def Create(cls, body):
@@ -350,11 +347,6 @@ class Attr(Subrecord):
         page_resident = bool(acbp & 1)
         assert align_type != 7
         is_physical = align_type in {0, 5}
-        locateability = "absolute" if is_physical else "load-time locateable" if align_type == 6 else "relocateable"
-        alignment = "byte" if align_type == 1 else "word" if align_type == 2 else \
-            "paragraph" if align_type in {3, 6} else "page" if align_type == 4 else \
-            "unknown"
-        named = align_type != 5
         if is_physical:
             assert combination == 0
             subbody = PhysicalAddress(body[2] << 8 | body[1], body[3])
@@ -365,11 +357,24 @@ class Attr(Subrecord):
         else:
             subbody = b''
             rest = body[1:]
-        back = Attr(locateability, alignment, is_physical, named, combination, page_resident, subbody, big)
+        back = Attr(align_type, combination, page_resident, big, subbody)
         return back, rest
 
     def deserialize(self):
-        return vars(self)
+        back = super().deserialize()
+        del back["align_type"]
+        is_physical = self.align_type in {0, 5}
+        back["is_physical"] = is_physical
+        back["locateability"] = "absolute" if is_physical else \
+            "load-time locateable" if self.align_type == 6 else \
+            "relocateable"
+        back["alignment"] = "byte" if self.align_type == 1 else \
+            "word" if self.align_type == 2 else \
+            "paragraph" if self.align_type in {3, 6} else \
+            "page" if self.align_type == 4 else \
+            "unknown"
+        back["named"] = self.align_type != 5
+        return back
 
 
 @dataclass
@@ -402,7 +407,7 @@ class SegDef(Subrecord):
             self.seg_name, self.class_name, self.Overlay_name = (0,) * 3
 
     def deserialize(self, lnames: list[str]) -> dict[str, str | int | dict]:
-        segment = vars(self)
+        segment = super().deserialize()
         name_tii = ("seg_name", "class_name", "Overlay_name")
         for name_t in name_tii:
             name_ind = segment[name_t]
