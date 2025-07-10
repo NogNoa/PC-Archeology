@@ -92,7 +92,8 @@ def index_create(body: bytes) -> tuple[int, bytes]:
 
 
 class Subrecord:
-    pass
+    def deserialize(self, *args, **kwargs):
+        return vars(self)
 
 
 @dataclass
@@ -367,6 +368,9 @@ class Attr(Subrecord):
         back = Attr(locateability, alignment, is_physical, named, combination, page_resident, subbody, big)
         return back, rest
 
+    def deserialize(self):
+        return vars(self)
+
 
 @dataclass
 class SegDef(Subrecord):
@@ -396,6 +400,17 @@ class SegDef(Subrecord):
             self.seg_name, self.class_name, self.Overlay_name = defnames
         else:
             self.seg_name, self.class_name, self.Overlay_name = (0,) * 3
+
+    def deserialize(self, lnames: list[str]) -> dict[str, str | int | dict]:
+        segment = vars(self)
+        name_tii = ("seg_name", "class_name", "Overlay_name")
+        for name_t in name_tii:
+            name_ind = segment[name_t]
+            if name_ind:
+                segment[name_t] = lnames[name_ind - 1]
+        segment["name"] = " ".join(segment[name_t] for name_t in name_tii)
+        segment["seg_attr"] = self.seg_attr.deserialize()
+        return segment
 
 
 @dataclass
@@ -619,13 +634,7 @@ class DeserializedModule:
             rec, src, module = self.step(module)
             if not isinstance(src, SegDef):
                 break
-            segment = vars(src)
-            name_tii = ("seg_name", "class_name", "Overlay_name")
-            for name_t in name_tii:
-                name_ind = segment[name_t]
-                if name_ind:
-                    segment[name_t] = self.lnames[name_ind - 1]
-            segment["name"] = " ".join(segment[name_t] for name_t in name_tii)
+            segment = src.deserialize(self.lnames)
             self.segments.append(segment)
         self.typedefs = ()
         self.groups = []
