@@ -1,5 +1,6 @@
 import itertools
 import sys
+from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from typing import Self, Optional
@@ -17,21 +18,24 @@ class PhysicalAddress:
 @dataclass
 class LoadtimeLocateable:
     ltl_dat: int  # byte
-    in_group: bool
     max_length: int  # 16-bit
     group_offset: int  # 16-bit
 
     def __init__(self, ltl_dat: int, max_length: int, group_offset: int):
         bsm = ltl_dat & 1
-        self.in_group = ltl_dat == 0x80
         assert not ltl_dat & 0b1111110
         if bsm:
             assert max_length == 0
             max_length = BIG_SEGMENT
-        assert self.in_group or group_offset == 0
         self.ltl_dat = ltl_dat
         self.max_length = max_length
         self.group_offset = group_offset
+
+    def deserialize(self):
+        back = copy(vars(self))
+        back["in_group"] = self.ltl_dat == 0x80
+        assert back["in_group"] or self.group_offset == 0
+        del back["ltl_dat"]
 
 
 class RecordType(Enum):
@@ -93,7 +97,7 @@ def index_create(body: bytes) -> tuple[int, bytes]:
 
 class Subrecord:
     def deserialize(self, *args, **kwargs):
-        return vars(self)
+        return copy(vars(self))
 
 
 @dataclass
@@ -331,7 +335,7 @@ class LinNum(Subrecord):
 
 
 @dataclass
-class Attr(Subrecord):
+class SegAttr(Subrecord):
     align_type: int
     combination: int
     page_resident: bool
@@ -357,12 +361,11 @@ class Attr(Subrecord):
         else:
             subbody = b''
             rest = body[1:]
-        back = Attr(align_type, combination, page_resident, big, subbody)
+        back = SegAttr(align_type, combination, page_resident, big, subbody)
         return back, rest
 
     def deserialize(self):
         back = super().deserialize()
-        del back["align_type"]
         is_physical = self.align_type in {0, 5}
         back["is_physical"] = is_physical
         back["locateability"] = "absolute" if is_physical else \
@@ -373,14 +376,19 @@ class Attr(Subrecord):
             "paragraph" if self.align_type in {3, 6} else \
             "page" if self.align_type == 4 else \
             "unknown"
-        back["named"] = self.align_type != 5
+        del back["align_type"]
+        back["named"] = self.named
         return back
+
+    @property
+    def named(self) -> bool:
+        return self.align_type != 5
 
 
 @dataclass
 class SegDef(Subrecord):
     index: int  # 31-bit
-    seg_attr: Attr
+    seg_attr: SegAttr
     length: int
     seg_name: int
     class_name: int
@@ -389,7 +397,7 @@ class SegDef(Subrecord):
     # noinspection PyUnresolvedReferences
     def __init__(self, index, body: bytes):
         self.index = index
-        self.seg_attr, body = Attr.Create(body)
+        self.seg_attr, body = SegAttr.Create(body)
         self.length = body[1] << 8 | body[0]
         body = body[2:]
         if self.seg_attr.big:
