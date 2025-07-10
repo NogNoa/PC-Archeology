@@ -21,21 +21,22 @@ class LoadtimeLocateable:
     max_length: int  # 16-bit
     group_offset: int  # 16-bit
 
-    def __init__(self, ltl_dat: int, max_length: int, group_offset: int):
-        bsm = ltl_dat & 1
-        assert not ltl_dat & 0b1111110
+    def __init__(self, val: bytes):
+        self.ltl_dat = val[0]
+        self.max_length = val[2] << 8 | val[1]
+        self.group_offset = val[4] << 8 | val[3]
+        bsm = self.ltl_dat & 1
+        assert not self.ltl_dat & 0b1111110
         if bsm:
-            assert max_length == 0
-            max_length = BIG_SEGMENT
-        self.ltl_dat = ltl_dat
-        self.max_length = max_length
-        self.group_offset = group_offset
+            assert self.max_length == 0
+            self.max_length = BIG_SEGMENT
 
     def deserialize(self):
         back = copy(vars(self))
         back["in_group"] = self.ltl_dat == 0x80
         assert back["in_group"] or self.group_offset == 0
         del back["ltl_dat"]
+        return back
 
 
 class RecordType(Enum):
@@ -356,8 +357,7 @@ class SegAttr(Subrecord):
             subbody = PhysicalAddress(body[2] << 8 | body[1], body[3])
             rest = body[4:]
         elif align_type == 6:
-            subbody = LoadtimeLocateable(body[1], body[3] << 8 | body[2], body[5] << 8 | body[4])
-            rest = body[6:]
+            subbody, rest = LoadtimeLocateable(body[1:6]), body[6:]
         else:
             subbody = b''
             rest = body[1:]
