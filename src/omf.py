@@ -596,21 +596,27 @@ class DeserializedModule:
     data: list[dict]
     threads: thread_dict
 
-    def __init__(self, module: tuple[Record, ...]):
+    @staticmethod
+    def step(module: tuple[Record, ...]) -> tuple[Record, Subrecord, tuple[Record, ...]]:
         rec, module = module[0], module[1:]
+        step = rec.body
+        return rec, step, module
+
+    def __init__(self, module: tuple[Record, ...]):
+        rec, src, module = self.step(module)
         assert rec.rectype in {RecordType.THEADR, RecordType.LHEADR}
         assert isinstance(rec.body, NAME)
         self.name = rec.body.deserialize()
-        src, module = module[0].body, module[1:]
+        rec, src, module = self.step(module)
         if isinstance(src, NAME):
             self.path = src.deserialize()
-            rec, module = module[0], module[1:]
+            rec, src, module = self.step(module)
         assert rec.rectype == RecordType.LNAMES
         assert isinstance(rec.body, list)
         self.lnames = [n.deserialize() for n in rec.body]
         self.segments = []
         while True:
-            src, module = module[0].body, module[1:]
+            rec, src, module = self.step(module)
             if not isinstance(src, SegDef):
                 break
             segment = vars(src)
