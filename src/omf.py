@@ -335,13 +335,14 @@ class Attr(Subrecord):
     combination: int
     page_resident: bool
     child: PhysicalAddress | LoadtimeLocateable
+    big: bool
 
     @classmethod
     def Create(cls, body):
         acbp = body[0]
         align_type = acbp >> 5
         combination = (acbp >> 2) & 7
-        big = acbp & 2
+        big = bool(acbp & 2)
         page_resident = bool(acbp & 1)
         assert align_type != 7
         is_physical = align_type in {0, 5}
@@ -360,8 +361,7 @@ class Attr(Subrecord):
         else:
             subbody = b''
             rest = body[1:]
-        back = Attr(locateability, alignment, is_physical, named, combination, page_resident, subbody)
-        back.big = big
+        back = Attr(locateability, alignment, is_physical, named, combination, page_resident, subbody, big)
         return back, rest
 
 
@@ -380,10 +380,6 @@ class SegDef(Subrecord):
         self.seg_attr, body = Attr.Create(body)
         self.length = body[1] << 8 | body[0]
         body = body[2:]
-        try:
-            self.seg_attr.big
-        except AttributeError:
-            return
         if self.seg_attr.big:
             assert self.length == 0
             self.length = BIG_SEGMENT
@@ -609,26 +605,28 @@ class DeserializedModule:
         assert rec.rectype == RecordType.LNAMES
         assert isinstance(rec.body, list)
         self.lnames = [n.body.decode("ascii") for n in rec.body]
+        self.segments = []
         while True:
             rec, module = module[0], module[1:]
             src = rec.body
             if not isinstance(src, SegDef):
                 break
             segment = vars(src)
-            if self.lnames:
-                for name_ind in (src.seg_name, src.class_name, src.Overlay_name):
-                    if name_ind:
-                        segment["name"] += " " + self.lnames[name_ind - 1]
-            segment["name"] = segment["name"].strip()
+            name_tii = ("seg_name", "class_name", "Overlay_name")
+            for name_t in name_tii:
+                name_ind = segment[name_t]
+                if name_ind:
+                    segment[name_t] = self.lnames[name_ind - 1]
+            segment["name"] = " ".join(segment[name_t] for name_t in name_tii)
             self.segments.append(segment)
         self.typedefs = ()
-        self.segments = []
         self.groups = []
         self.publics = []
         self.externals = []
         self.linenums = {}
         self.data = []
         self.threads = {"frame": {}, "target": {}}
+        module = (rec,) + module
         for rec in module:
             src = rec.body
             if isinstance(src, GroupDef):
