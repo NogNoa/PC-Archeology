@@ -104,6 +104,9 @@ class NAME(Subrecord):
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         length = val[0]
         return cls(length, val[1:length + 1]), val[length + 1:]
+    
+    def deserialize(self) -> str:
+        return self.body.decode("ascii")
 
 
 @dataclass
@@ -597,18 +600,17 @@ class DeserializedModule:
         rec, module = module[0], module[1:]
         assert rec.rectype in {RecordType.THEADR, RecordType.LHEADR}
         assert isinstance(rec.body, NAME)
-        self.name = rec.body.body.decode("ascii")
-        rec, module = module[0], module[1:]
-        if isinstance(rec.body, NAME):
-            self.path = rec.body.body.decode("ascii")
+        self.name = rec.body.deserialize()
+        src, module = module[0].body, module[1:]
+        if isinstance(src, NAME):
+            self.path = src.deserialize()
             rec, module = module[0], module[1:]
         assert rec.rectype == RecordType.LNAMES
         assert isinstance(rec.body, list)
-        self.lnames = [n.body.decode("ascii") for n in rec.body]
+        self.lnames = [n.deserialize() for n in rec.body]
         self.segments = []
         while True:
-            rec, module = module[0], module[1:]
-            src = rec.body
+            src, module = module[0].body, module[1:]
             if not isinstance(src, SegDef):
                 break
             segment = vars(src)
