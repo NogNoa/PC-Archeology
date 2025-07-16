@@ -3,6 +3,7 @@ import sys
 from copy import copy
 from dataclasses import dataclass
 from enum import Enum
+from types import NoneType
 from typing import Self, Optional
 from pathlib import Path
 
@@ -13,6 +14,9 @@ BIG_SEGMENT = 0x1000
 class PhysicalAddress:
     segment: int  # 16-bit
     offset: int  # 16-bit
+
+    def deserialize(self):
+        return self
 
 
 @dataclass
@@ -258,8 +262,19 @@ class ModEnd(Subrecord):
             self.locateability = "N/A"
 
 
+class ContextDef(Subrecord):
+    name_index : int
+
+    def deserialize(self, lnames):
+        back = super().deserialize()
+        if self.name_index:
+            # noinspection PyTypeChecker
+            back["name"] = lnames[self.name_index - 1]
+        return back
+
+
 @dataclass
-class ExtDef(Subrecord):
+class ExtDef(ContextDef):
     name: NAME
     obj_type: str | int
     index: int
@@ -304,7 +319,7 @@ class Public(Subrecord):
 
 
 @dataclass
-class PubDef(Subrecord):
+class PubDef(ContextDef):
     base: Base
     body: tuple[Public, ...]
 
@@ -341,7 +356,7 @@ class SegAttr(Subrecord):
     combination: int
     page_resident: bool
     big: bool
-    child: PhysicalAddress | LoadtimeLocateable
+    child: PhysicalAddress | LoadtimeLocateable | NoneType
 
     @classmethod
     def Create(cls, body):
@@ -359,7 +374,7 @@ class SegAttr(Subrecord):
         elif align_type == 6:
             subbody, rest = LoadtimeLocateable(body[1:6]), body[6:]
         else:
-            subbody = b''
+            subbody = None
             rest = body[1:]
         back = SegAttr(align_type, combination, page_resident, big, subbody)
         return back, rest
@@ -378,6 +393,10 @@ class SegAttr(Subrecord):
             "unknown"
         del back["align_type"]
         back["named"] = self.named
+        if back["child"] is not None:
+            back["child"] = self.child.deserialize()
+        else:
+            del back["child"]
         return back
 
     @property
@@ -423,6 +442,7 @@ class SegDef(Subrecord):
                 segment[name_t] = lnames[name_ind - 1]
         segment["name"] = " ".join(segment[name_t] for name_t in name_tii)
         segment["seg_attr"] = self.seg_attr.deserialize()
+        del segment["index"]
         return segment
 
 
@@ -446,7 +466,7 @@ class GroupComponentDescriptor:
 
 
 @dataclass
-class GroupDef(Subrecord):
+class GroupDef(ContextDef):
     name_index: int
     descriptors: list[GroupComponentDescriptor]
 
@@ -614,7 +634,6 @@ thread_dict = dict[str, dict[int, dict]]
 
 @dataclass
 class DeserializedModule:
-    lnames: list[str]
     typedefs: tuple[str, ...]
     segments: list[dict]
     groups: list[dict]
@@ -649,6 +668,8 @@ class DeserializedModule:
                 break
             segment = src.deserialize(self.lnames)
             self.segments.append(segment)
+        while isinstance(src, ContextDef):
+            rec, src, module = self.step(module)
         self.typedefs = ()
         self.groups = []
         self.publics = []
