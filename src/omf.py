@@ -276,7 +276,7 @@ class ExtDef(Subrecord):
         ext_index = next(module.ext_numb)
         return cls(name, obj_type, ext_index), val[1:]
 
-    def deserialize(self, typedefs: dict) -> dict[str, str]:
+    def deserialize(self, lnames: dict, typedefs: dict) -> dict[str, str]:
         back = {"name": self.name.deserialize()}
         if self.obj_type and typedefs:
             back["type"] = typedefs[self.obj_type - 1]["name"]
@@ -473,7 +473,7 @@ class GroupDef(Subrecord):
             descriptor, body = GroupComponentDescriptor.Create(body)
             self.descriptors.append(descriptor)
 
-    def deserialize(self, lnames):
+    def deserialize(self, lnames, *args):
         back = super().deserialize()
         if self.name:
             # noinspection PyTypeChecker
@@ -682,21 +682,21 @@ class DeserializedModule:
         self.groups = []
         self.externals = []
         while isinstance(src, ContextDef):
+            definition = src.deserialize(self.lnames, self.typedefs)
             if rec.rectype == RecordType.TYPDEF:
-                definition = src.deserialize()
                 self.typedefs.append(definition)
             elif rec.rectype == RecordType.GRPDEF:
-                definition = src.deserialize(self.lnames)
                 self.groups.append(definition)
             elif rec.rectype == RecordType.EXTDEF:
-                definition = src.deserialize(self.typedefs)
                 self.externals.append(definition)
             rec, src, module = self.step(module)
         self.data = []
+        self.publics = []
+        self.threads = {"frame": {}, "target": {}}
         while True:
             # data item
-            # content_def item
             if isinstance(src, datarec):
+                # content_def item
                 datum = src.deserialize()
                 self.data.append(datum)
                 rec, src, module = self.step(module)
@@ -719,11 +719,27 @@ class DeserializedModule:
                                     "method"]  # refer to most recent target thread with this number
                             else:
                                 target_method = block.fix_dat.target
+                    rec, sec, module = self.step(module)
+            elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
+                # thread_def item
+                for block in src:
+                    if block.thred in self.threads[block.thread_type]:
+                        print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
+                    self.threads[block.thread_type][block.thred] = {"method": block.method,
+                                                                    "index" : block.index}
+            elif isinstance(src, DatDef):
+                definition = src.deserialize(self.lnames, self.typedefs)
+                if rec.rectype == RecordType.TYPDEF:
+                    self.typedefs.append(definition)
+                elif rec.rectype == RecordType.PUBDEF:
+                    self.publics.append(definition)
+                elif rec.rectype == RecordType.EXTDEF:
+                    self.externals.append(definition)
             else:
                 break
-        self.publics = []
+            rec, sec, module = self.step(module)
+        rec, sec, module = self.step(module)
         self.linenums = {}
-        self.threads = {"frame": {}, "target": {}}
         module = (rec,) + module
         for rec in module:
             src = rec.body
@@ -747,12 +763,6 @@ class DeserializedModule:
                 # noinspection PyTypeChecker
                 pubdef["Locatability"] = "logical" if src.base.frame_numb is None else "physical"
                 self.publics.append(pubdef)
-            elif isinstance(src, ExtDef):
-                extdef = {"name": src.name.body.decode("ascii"),
-                          }
-                if src.obj_type and self.typedefs:
-                    extdef["type"] = self.typedefs[src.obj_type - 1]["name"]
-                self.externals.append(extdef)
             elif isinstance(src, LinNum):
                 linenums = {}
                 if src.base.grp_ind and self.groups:
@@ -777,7 +787,6 @@ class DeserializedModule:
                 self.data.append(datum)
 
 
-
 scroll_path = Path(sys.argv[1])
 # noinspection PyUnresolvedReferences
 for scroll in scroll_path.iterdir():
@@ -793,3 +802,5 @@ for scroll in scroll_path.iterdir():
     # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
     print(str(DeserializedModule(module())).replace(', ', ',\t'))
 
+
+# todo: body should be one subrecord. do something else for list of subrecord
