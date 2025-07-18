@@ -528,7 +528,7 @@ class LEData(DataRec):
 
     def deserialize(self, segments: list[dict], *args):
         datum = super().deserialize(segments)
-        datum["locateability"] = "logical",
+        datum["locateability"] = "logical"
         datum["form"] = "enumerated"
         return datum
 
