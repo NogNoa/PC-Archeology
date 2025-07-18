@@ -487,15 +487,24 @@ class TypDef(Subrecord):
 
 @dataclass
 class LEData(Subrecord):
-    seg_ind: int
+    segment: int
     offset: int
     body: bytes
 
     def __init__(self, body: bytes):
-        self.seg_ind, body = index_create(body)
+        self.segment, body = index_create(body)
         self.offset = body[1] << 8 | body[0]
         self.body = body[2:]
         assert len(self.body) <= 0x400
+
+    def deserialize(self, segments: list[dict[str, str]], *args):
+        datum = super().deserialize()
+        datum["locateability"] = "logical",
+        datum["form"] = "enumerated"
+        if self.segment and segments:
+            # noinspection PyTypeChecker
+            datum["segment"] = segments[self.segment - 1]["name"]
+        return datum
 
 
 class IteratedBlock:
@@ -697,16 +706,13 @@ class DeserializedModule:
             # data item
             if isinstance(src, datarec):
                 # content_def item
-                datum = src.deserialize()
+                datum = src.deserialize(self.segments)
                 self.data.append(datum)
                 rec, src, module = self.step(module)
                 while rec.rectype == RecordType.FIXUPP:
                     for block in src:
                         if isinstance(block, Thread):
-                            if block.thred in self.threads[block.thread_type]:
-                                print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
-                            self.threads[block.thread_type][block.thred] = {"method": block.method,
-                                                                            "index" : block.index}
+                            self.thread_deserialize(block)
                         elif isinstance(block, Fixupp):
                             if block.fix_dat.frame_by_thread:
                                 frame_method = self.threads["frame"][
@@ -723,10 +729,7 @@ class DeserializedModule:
             elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
                 # thread_def item
                 for block in src:
-                    if block.thred in self.threads[block.thread_type]:
-                        print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
-                    self.threads[block.thread_type][block.thred] = {"method": block.method,
-                                                                    "index" : block.index}
+                    self.thread_deserialize(block)
             elif isinstance(src, DatDef):
                 definition = src.deserialize(self.lnames, self.typedefs)
                 if rec.rectype == RecordType.TYPDEF:
@@ -775,16 +778,12 @@ class DeserializedModule:
                 else:
                     linenums["Locatability"] = "logical"
                 self.linenums = linenums
-            elif isinstance(src, LEData | LIData):
-                datum = {"locateability": "logical",
-                         "offset": src.offset,
-                         "body": src.body,
-                         "form": {LEData: "enumerated", LIData: "iterated"}[type(src)]
-                         }
-                if src.seg_ind and self.segments:
-                    # noinspection PyTypeChecker
-                    datum["segment"] = self.segments[src.seg_ind - 1]
-                self.data.append(datum)
+
+    def thread_deserialize(self, block):
+        back = block.deserialize()
+        if block.thred in self.threads[block.thread_type]:
+            print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
+        self.threads[block.thread_type][block.thred] = back
 
 
 scroll_path = Path(sys.argv[1])
