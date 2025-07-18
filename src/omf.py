@@ -719,7 +719,7 @@ class DeserializedModule:
                                     "method"]  # refer to most recent target thread with this number
                             else:
                                 target_method = block.fix_dat.target
-                    rec, sec, module = self.step(module)
+                    rec, src, module = self.step(module)
             elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
                 # thread_def item
                 for block in src:
@@ -737,8 +737,8 @@ class DeserializedModule:
                     self.externals.append(definition)
             else:
                 break
-            rec, sec, module = self.step(module)
-        rec, sec, module = self.step(module)
+            rec, src, module = self.step(module)
+        rec, src, module = self.step(module)
         self.linenums = {}
         module = (rec,) + module
         for rec in module:
