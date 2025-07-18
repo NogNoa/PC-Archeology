@@ -681,14 +681,16 @@ class DeserializedModule:
         self.groups = []
         self.externals = []
         while isinstance(src, ContextDef):
-            rec, src, module = self.step(module)
-            definition = src.deserialize()
             if rec.rectype == RecordType.TYPDEF:
+                definition = src.deserialize()
                 self.typedefs.append(definition)
             elif rec.rectype == RecordType.GRPDEF:
+                definition = src.deserialize(self.lnames)
                 self.groups.append(definition)
             elif rec.rectype == RecordType.EXTDEF:
+                definition = src.deserialize(self.typedefs)
                 self.externals.append(definition)
+            rec, src, module = self.step(module)
         self.publics = []
         self.linenums = {}
         self.data = []
