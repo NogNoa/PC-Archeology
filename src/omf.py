@@ -50,6 +50,7 @@ class RecordType(Enum):
     MOOEND = 0x8A
     MOOEND2 = 0x8B
     EXTDEF = 0x8C
+    TYPDEF = 0x8E
     PUBDEF = 0x90
     PUBDEF2 = 0x91
     LINNUM = 0x94
@@ -473,8 +474,10 @@ class GroupDef(Subrecord):
             back["name"] = lnames[self.name_index - 1]
         return back
 
+
 class TypDef(Subrecord):
     pass
+
 
 @dataclass
 class LEData(Subrecord):
@@ -634,7 +637,7 @@ DatDef = ExtDef | PubDef | TypDef
 
 @dataclass
 class DeserializedModule:
-    typedefs: tuple[str, ...]
+    typedefs: list[dict]
     segments: list[dict]
     groups: list[dict]
     publics: list[dict]
@@ -658,22 +661,29 @@ class DeserializedModule:
         if isinstance(src, NAME):
             self.path = src.deserialize()
             rec, src, module = self.step(module)
-        assert rec.rectype == RecordType.LNAMES
-        assert isinstance(rec.body, list)
-        self.lnames = [n.deserialize() for n in rec.body]
+        self.lnames = []
+        while rec.rectype == RecordType.LNAMES:
+            assert isinstance(rec.body, list)
+            self.lnames.extend([n.deserialize() for n in rec.body])
+            rec, src, module = self.step(module)
         self.segments = []
-        rec, src, module = self.step(module)
         while isinstance(src, SegDef):
             segment = src.deserialize(self.lnames)
             self.segments.append(segment)
             rec, src, module = self.step(module)
+        self.typedefs = []
+        self.groups = []
+        self.externals = []
         while isinstance(src, ContextDef):
             rec, src, module = self.step(module)
-
-        self.typedefs = ()
-        self.groups = []
+            definition = src.deserialize()
+            if rec.rectype == RecordType.TYPDEF:
+                self.typedefs.append(definition)
+            elif rec.rectype == RecordType.GRPDEF:
+                self.groups.append(definition)
+            elif rec.rectype == RecordType.EXTDEF:
+                self.externals.append(definition)
         self.publics = []
-        self.externals = []
         self.linenums = {}
         self.data = []
         self.threads = {"frame": {}, "target": {}}
@@ -711,7 +721,7 @@ class DeserializedModule:
                 extdef = {"name": src.name.body.decode("ascii"),
                           }
                 if src.obj_type and self.typedefs:
-                    extdef["type"] = self.typedefs[src.obj_type - 1]
+                    extdef["type"] = self.typedefs[src.obj_type - 1]["name"]
                 self.externals.append(extdef)
             elif isinstance(src, LinNum):
                 linenums = {}
