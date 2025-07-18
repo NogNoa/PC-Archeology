@@ -639,6 +639,7 @@ class Module:
 thread_dict = dict[str, dict[int, dict]]
 ContextDef = ExtDef | TypDef | GroupDef
 DatDef = ExtDef | PubDef | TypDef
+datarec = LEData | LEData
 
 
 @dataclass
@@ -653,10 +654,10 @@ class DeserializedModule:
     threads: thread_dict
 
     @staticmethod
-    def step(module: tuple[Record, ...]) -> tuple[Record, Subrecord, tuple[Record, ...]]:
+    def step(module: tuple[Record, ...]) -> tuple[Record, Subrecord | list[Subrecord], tuple[Record, ...]]:
         rec, module = module[0], module[1:]
-        step = rec.body
-        return rec, step, module
+        src = rec.body
+        return rec, src, module
 
     def __init__(self, module: tuple[Record, ...]):
         rec, src, module = self.step(module)
@@ -691,9 +692,37 @@ class DeserializedModule:
                 definition = src.deserialize(self.typedefs)
                 self.externals.append(definition)
             rec, src, module = self.step(module)
+        self.data = []
+        while True:
+            # data item
+            # content_def item
+            if isinstance(src, datarec):
+                datum = src.deserialize()
+                self.data.append(datum)
+                rec, src, module = self.step(module)
+                while rec.rectype == RecordType.FIXUPP:
+                    for block in src:
+                        if isinstance(block, Thread):
+                            if block.thred in self.threads[block.thread_type]:
+                                print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
+                            self.threads[block.thread_type][block.thred] = {"method": block.method,
+                                                                            "index" : block.index}
+                        elif isinstance(block, Fixupp):
+                            if block.fix_dat.frame_by_thread:
+                                frame_method = self.threads["frame"][
+                                    block.fix_dat.frame]["method"]  # refer to most recent frame thread with this number
+                            else:
+                                frame_method = block.fix_dat.frame
+                            if block.fix_dat.target_by_thread:
+                                target_method = self.threads["target"][
+                                    block.fix_dat.target][
+                                    "method"]  # refer to most recent target thread with this number
+                            else:
+                                target_method = block.fix_dat.target
+            else:
+                break
         self.publics = []
         self.linenums = {}
-        self.data = []
         self.threads = {"frame": {}, "target": {}}
         module = (rec,) + module
         for rec in module:
@@ -746,24 +775,7 @@ class DeserializedModule:
                     # noinspection PyTypeChecker
                     datum["segment"] = self.segments[src.seg_ind - 1]
                 self.data.append(datum)
-            elif rec.rectype == RecordType.FIXUPP:
-                for block in src:
-                    if isinstance(block, Thread):
-                        if block.thred in self.threads[block.thread_type]:
-                            print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
-                        self.threads[block.thread_type][block.thred] = {"method": block.method,
-                                                                        "index": block.index}
-                    elif isinstance(block, Fixupp):
-                        if block.fix_dat.frame_by_thread:
-                            frame_method = self.threads["frame"][
-                                block.fix_dat.frame]["method"]  # refer to most recent frame thread with this number
-                        else:
-                            frame_method = block.fix_dat.frame
-                        if block.fix_dat.target_by_thread:
-                            target_method =  self.threads["target"][
-                                block.fix_dat.target]["method"]  # refer to most recent target thread with this number
-                        else:
-                            target_method = block.fix_dat.target
+
 
 
 scroll_path = Path(sys.argv[1])
