@@ -262,19 +262,8 @@ class ModEnd(Subrecord):
             self.locateability = "N/A"
 
 
-class ContextDef(Subrecord):
-    name_index : int
-
-    def deserialize(self, lnames):
-        back = super().deserialize()
-        if self.name_index:
-            # noinspection PyTypeChecker
-            back["name"] = lnames[self.name_index - 1]
-        return back
-
-
 @dataclass
-class ExtDef(ContextDef):
+class ExtDef(Subrecord):
     name: NAME
     obj_type: str | int
     index: int
@@ -319,7 +308,7 @@ class Public(Subrecord):
 
 
 @dataclass
-class PubDef(ContextDef):
+class PubDef(Subrecord):
     base: Base
     body: tuple[Public, ...]
 
@@ -466,7 +455,7 @@ class GroupComponentDescriptor:
 
 
 @dataclass
-class GroupDef(ContextDef):
+class GroupDef(Subrecord):
     name_index: int
     descriptors: list[GroupComponentDescriptor]
 
@@ -477,6 +466,15 @@ class GroupDef(ContextDef):
             descriptor, body = GroupComponentDescriptor.Create(body)
             self.descriptors.append(descriptor)
 
+    def deserialize(self, lnames):
+        back = super().deserialize()
+        if self.name_index:
+            # noinspection PyTypeChecker
+            back["name"] = lnames[self.name_index - 1]
+        return back
+
+class TypDef(Subrecord):
+    pass
 
 @dataclass
 class LEData(Subrecord):
@@ -630,6 +628,8 @@ class Module:
 
 
 thread_dict = dict[str, dict[int, dict]]
+ContextDef = ExtDef | TypDef | GroupDef
+DatDef = ExtDef | PubDef | TypDef
 
 
 @dataclass
@@ -662,14 +662,14 @@ class DeserializedModule:
         assert isinstance(rec.body, list)
         self.lnames = [n.deserialize() for n in rec.body]
         self.segments = []
-        while True:
-            rec, src, module = self.step(module)
-            if not isinstance(src, SegDef):
-                break
+        rec, src, module = self.step(module)
+        while isinstance(src, SegDef):
             segment = src.deserialize(self.lnames)
             self.segments.append(segment)
+            rec, src, module = self.step(module)
         while isinstance(src, ContextDef):
             rec, src, module = self.step(module)
+
         self.typedefs = ()
         self.groups = []
         self.publics = []
