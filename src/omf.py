@@ -115,7 +115,7 @@ class NAME(Subrecord):
     def create(cls, val: bytes) -> tuple[Self, bytes]:
         length = val[0]
         return cls(length, val[1:length + 1]), val[length + 1:]
-    
+
     def deserialize(self) -> str:
         return self.body.decode("ascii")
 
@@ -486,15 +486,22 @@ class TypDef(Subrecord):
 
 
 @dataclass
-class LEData(Subrecord):
+class Data(Subrecord):
     segment: int
     offset: int
-    body: bytes
 
     def __init__(self, body: bytes):
         self.segment, body = index_create(body)
         self.offset = body[1] << 8 | body[0]
         self.body = body[2:]
+
+
+@dataclass
+class LEData(Data):
+    body: bytes
+
+    def __init__(self, body: bytes):
+        super().__init__(body)
         assert len(self.body) <= 0x400
 
     def deserialize(self, segments: list[dict[str, str]], *args):
@@ -548,15 +555,13 @@ class IteratedBlock:
 
 
 @dataclass
-class LIData(Subrecord):
-    seg_ind: int
-    offset: int
+class LIData(Data):
     body: IteratedBlock
 
     def __init__(self, val: bytes):
-        self.seg_ind, val = index_create(val)
-        self.offset = val[1] << 8 | val[0]
-        self.body, val = IteratedBlock.create(val[2:])
+        super().__init__(val)
+        # noinspection PyTypeChecker
+        self.body, val = IteratedBlock.create(self.body)
         assert not val
 
 
