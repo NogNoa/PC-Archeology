@@ -266,7 +266,7 @@ class ModEnd(Subrecord):
 @dataclass
 class ExtDef(Subrecord):
     name: NAME
-    obj_type: str | int
+    obj_type: int
     index: int
 
     @classmethod
@@ -275,6 +275,12 @@ class ExtDef(Subrecord):
         obj_type = val[0]
         ext_index = next(module.ext_numb)
         return cls(name, obj_type, ext_index), val[1:]
+
+    def deserialize(self, typedefs: dict) -> dict[str, str]:
+        back = {"name": self.name.deserialize()}
+        if self.obj_type and typedefs:
+            back["type"] = typedefs[self.obj_type - 1]["name"]
+        return back
 
 
 @dataclass
@@ -457,11 +463,11 @@ class GroupComponentDescriptor:
 
 @dataclass
 class GroupDef(Subrecord):
-    name_index: int
+    name: int
     descriptors: list[GroupComponentDescriptor]
 
     def __init__(self, body: bytes):
-        self.name_index, body = index_create(body)
+        self.name, body = index_create(body)
         self.descriptors = []
         while body:
             descriptor, body = GroupComponentDescriptor.Create(body)
@@ -469,9 +475,9 @@ class GroupDef(Subrecord):
 
     def deserialize(self, lnames):
         back = super().deserialize()
-        if self.name_index:
+        if self.name:
             # noinspection PyTypeChecker
-            back["name"] = lnames[self.name_index - 1]
+            back["name"] = lnames[self.name - 1]
         return back
 
 
@@ -690,14 +696,7 @@ class DeserializedModule:
         module = (rec,) + module
         for rec in module:
             src = rec.body
-            if isinstance(src, GroupDef):
-                group = {"name": '',
-                         "descriptors": src.descriptors}
-                if src.name_index and self.lnames:
-                    # noinspection PyTypeChecker
-                    group["name"] = self.lnames[src.name_index - 1]
-                self.groups.append(group)
-            elif isinstance(src, PubDef):
+            if isinstance(src, PubDef):
                 pubdef = {"publics": tuple(
                     {'name': pub.name.body.decode("ascii"),
                      'ofsset' : pub.offset
