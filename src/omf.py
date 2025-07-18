@@ -47,7 +47,7 @@ class RecordType(Enum):
     THEADR = 0x80
     LHEADR = 0x82
     COMMENT = 0x88
-    MOOEND = 0x8A
+    MODEND = 0x8A
     MOOEND2 = 0x8B
     EXTDEF = 0x8C
     TYPDEF = 0x8E
@@ -276,7 +276,7 @@ class ExtDef(Subrecord):
         ext_index = next(module.ext_numb)
         return cls(name, obj_type, ext_index), val[1:]
 
-    def deserialize(self, lnames: dict, typedefs: dict) -> dict[str, str]:
+    def deserialize(self, lnames: dict, typedefs: dict, *args, **kwargs) -> dict[str, str]:
         back = {"name": self.name.deserialize()}
         if self.obj_type and typedefs:
             back["type"] = typedefs[self.obj_type - 1]["name"]
@@ -326,6 +326,21 @@ class PubDef(Subrecord):
             pub, val = Public.create(val)
             body.append(pub)
         self.body = tuple(body)
+
+    def deserialize(self, lnames: dict, typedefs: dict, segments: list[dict], groups, *args, **kwargs) -> dict[str, str]:
+        pubdef = super().deserialize()
+        for pub in pubdef["body"]:
+            pub.name = pub.name.deserialize()
+        if self.base.grp_ind and groups:
+            pubdef["group"] = groups[self.base.grp_ind - 1]["name"]
+            if self.base.seg_ind and segments:
+                pubdef["segment"] = segments[self.base.seg_ind - 1]["name"]
+        if typedefs:
+            for pl, pub in enumerate(self.body):
+                if pub.type_index:
+                    pubdef["body"][pl]['type'] = typedefs[pub.type_index - 1]["name"]
+        pubdef["Locatability"] = "logical" if self.base.frame_numb is None else "physical"
+        return pubdef
 
 
 @dataclass
@@ -486,7 +501,7 @@ class TypDef(Subrecord):
 
 
 @dataclass
-class Data(Subrecord):
+class DataRec(Subrecord):
     segment: int
     offset: int
 
@@ -495,22 +510,26 @@ class Data(Subrecord):
         self.offset = body[1] << 8 | body[0]
         self.body = body[2:]
 
+    def deserialize(self, segments: list[dict]):
+        datum = super().deserialize()
+        if self.segment and segments:
+            # noinspection PyTypeChecker
+            datum["segment"] = segments[self.segment - 1]["name"]
+        return datum
+
 
 @dataclass
-class LEData(Data):
+class LEData(DataRec):
     body: bytes
 
     def __init__(self, body: bytes):
         super().__init__(body)
         assert len(self.body) <= 0x400
 
-    def deserialize(self, segments: list[dict[str, str]], *args):
-        datum = super().deserialize()
+    def deserialize(self, segments: list[dict], *args):
+        datum = super().deserialize(segments)
         datum["locateability"] = "logical",
         datum["form"] = "enumerated"
-        if self.segment and segments:
-            # noinspection PyTypeChecker
-            datum["segment"] = segments[self.segment - 1]["name"]
         return datum
 
 
@@ -555,7 +574,7 @@ class IteratedBlock:
 
 
 @dataclass
-class LIData(Data):
+class LIData(DataRec):
     body: IteratedBlock
 
     def __init__(self, val: bytes):
@@ -564,12 +583,17 @@ class LIData(Data):
         self.body, val = IteratedBlock.create(self.body)
         assert not val
 
+    def deserialize(self, segments: list[dict[str, str]], *args):
+        datum = super().deserialize(segments)
+        datum["locateability"] = "logical",
+        datum["form"] = "Iterated"
+        return datum
+
 
 @dataclass
 class Record:
     rectype: RecordType | int   # byte
     typehex: str
-    length: int  # 16-bit
     body: bytes | Subrecord | list[Subrecord]
 
     @classmethod
@@ -588,7 +612,7 @@ class Record:
             typehex = '%x' % rectype.value
         except AttributeError:
             typehex = '%x' % rectype
-        return cls(rectype, typehex , length, body), rest
+        return cls(rectype, typehex , body), rest
 
     @staticmethod
     def body_parse(rectype: RecordType, val: bytes, module: "Module") -> list[Subrecord]:
@@ -600,7 +624,7 @@ class Record:
             while val:
                 name, val = NAME.create(val)
                 body.append(name)
-        elif rectype in {RecordType.MOOEND, RecordType.MOOEND2}:
+        elif rectype in {RecordType.MODEND, RecordType.MOOEND2}:
             body = ModEnd(val)
         elif rectype in {RecordType.SEGDEF, RecordType.SEGDEF2}:
             body = SegDef(next(module.seg_numb), val)
@@ -644,6 +668,9 @@ class Module:
         while body:
             rec, body = Record.create(self, body)
             val.append(rec)
+        for pl, rec in enumerate(val):
+            if rec.rectype in {RecordType.EXTDEF, RecordType.LEXTDEF} and isinstance(rec.body, list):
+                val[pl:pl+1] = (Record(rec.rectype, rec.typehex, ext) for ext in rec.body)
         self.val = tuple(val)
 
     def __call__(self) -> tuple[Record, ...]:
@@ -653,7 +680,6 @@ class Module:
 thread_dict = dict[str, dict[int, dict]]
 ContextDef = ExtDef | TypDef | GroupDef
 DatDef = ExtDef | PubDef | TypDef
-datarec = LEData | LEData
 
 
 @dataclass
@@ -709,7 +735,7 @@ class DeserializedModule:
         self.threads = {"frame": {}, "target": {}}
         while True:
             # data item
-            if isinstance(src, datarec):
+            if isinstance(src, DataRec):
                 # content_def item
                 datum = src.deserialize(self.segments)
                 self.data.append(datum)
@@ -731,47 +757,28 @@ class DeserializedModule:
                             else:
                                 target_method = block.fix_dat.target
                     rec, src, module = self.step(module)
+                module = (rec,) + module
             elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
                 # thread_def item
                 for block in src:
                     self.thread_deserialize(block)
             elif isinstance(src, DatDef):
-                definition = src.deserialize(self.lnames, self.typedefs)
+                definition = src.deserialize(lnames=self.lnames, typedefs=self.typedefs,
+                                             segments=self.segments, groups=self.groups)
                 if rec.rectype == RecordType.TYPDEF:
                     self.typedefs.append(definition)
                 elif rec.rectype == RecordType.PUBDEF:
                     self.publics.append(definition)
                 elif rec.rectype == RecordType.EXTDEF:
                     self.externals.append(definition)
-            else:
+            elif rec.rectype != RecordType.COMMENT:
                 break
             rec, src, module = self.step(module)
-        rec, src, module = self.step(module)
         self.linenums = {}
-        module = (rec,) + module
+        assert rec.rectype == RecordType.MODEND
         for rec in module:
             src = rec.body
-            if isinstance(src, PubDef):
-                pubdef = {"publics": tuple(
-                    {'name': pub.name.body.decode("ascii"),
-                     'ofsset' : pub.offset
-                     }
-                    for pub in src.body)
-                }
-                if src.base.grp_ind and self.groups:
-                    # noinspection PyTypeChecker
-                    pubdef["group"] = self.groups[src.base.grp_ind - 1]
-                    if src.base.seg_ind and self.segments:
-                        # noinspection PyTypeChecker
-                        pubdef["segment"] = self.segments[src.base.seg_ind - 1]
-                if self.typedefs:
-                    for pl, pub in enumerate(src.body):
-                        if pub.type_index:
-                            pubdef["publics"][pl]['type'] = self.typedefs[pub.type_index - 1]
-                # noinspection PyTypeChecker
-                pubdef["Locatability"] = "logical" if src.base.frame_numb is None else "physical"
-                self.publics.append(pubdef)
-            elif isinstance(src, LinNum):
+            if isinstance(src, LinNum):
                 linenums = {}
                 if src.base.grp_ind and self.groups:
                     linenums["group"] = self.groups[src.base.grp_ind - 1]
