@@ -145,6 +145,13 @@ class Thread(Subrecord):
         thred = trd_dat & 3
         return cls(thread_type, method, thred, index), val
 
+    def deserialize(self, *args, **kwargs):
+        thread = super().deserialize()
+        thread["method"] = self.thread_type[0] + str(thread["method"])
+        del thread["thread_type"]
+        del thread["thred"]
+        return thread
+
 
 @dataclass
 class Locat:
@@ -173,16 +180,16 @@ class FixDat:
     frame_by_thread: bool
     target_by_thread: bool
     no_target_displacement: bool
-    frame: Optional[int]
-    target: int
+    frame_method: int
+    target_method: int
 
     def __init__(self, val: int) -> None:
         self.frame_by_thread = bool(val & 0x80)
         self.target_by_thread = bool(val & 8)
-        self.frame = (val >> 4) & 7
-        self.target = val & 7
-        self.no_target_displacement = bool(self.target & 4)
-        assert not self.frame_by_thread or not self.frame & 4
+        self.frame_method = (val >> 4) & 7
+        self.target_method = val & 7
+        self.no_target_displacement = bool(self.target_method & 4)
+        assert not self.frame_by_thread or not self.frame_method & 4
         assert not self.target_by_thread or not self.no_target_displacement
 
 
@@ -200,19 +207,30 @@ class Fixupp(Subrecord):
         locat = Locat(val[:2])
         fix_dat = FixDat(val[2])
         val = val[3:]
-        if not fix_dat.frame_by_thread and not fix_dat.frame & 4:
-            if fix_dat.frame == 3:
+        if not fix_dat.frame_by_thread and not fix_dat.frame_method & 4:
+            if fix_dat.frame_method == 3:
                 frame_datum, val = val[1] << 8 | val[0], val[2:]
             else:
                 frame_datum, val = index_create(val)
         if not fix_dat.target_by_thread:
-            if fix_dat.target & 3 == 3:
+            if fix_dat.target_method & 3 == 3:
                 target_datum, val = val[1] << 8 | val[0], val[2:]
             else:
                 target_datum, val = index_create(val)
         if not fix_dat.no_target_displacement:
             target_displacement, val = val[1] << 8 | val[0], val[2:]
         return cls(locat, fix_dat, frame_datum, target_datum, target_displacement), val
+
+    def deserialize(self, threads: dict, *args, **kwargs):
+        fixup = super().deserialize()
+        if self.fix_dat.frame_by_thread:
+            fixup["fixdat"].frame_method = threads["frame"][
+                self.fix_dat.frame_method]["method"]  # refer to most recent frame thread with this number
+        if self.fix_dat.target_by_thread:
+            fixup["fixdat"].target_method = threads["target"][
+                self.fix_dat.target_method][
+                "method"]  # refer to most recent target thread with this number
+        return fixup
 
 
 @dataclass
@@ -327,7 +345,7 @@ class PubDef(Subrecord):
             body.append(pub)
         self.body = tuple(body)
 
-    def deserialize(self, lnames: dict, typedefs: dict, segments: list[dict], groups, *args, **kwargs) -> dict[str, str]:
+    def deserialize(self, lnames: dict, typedefs: dict, segments: list[dict], groups, *args, **kwargs) -> dict:
         pubdef = super().deserialize()
         for pub in pubdef["body"]:
             pub.name = pub.name.deserialize()
@@ -745,17 +763,7 @@ class DeserializedModule:
                         if isinstance(block, Thread):
                             self.thread_deserialize(block)
                         elif isinstance(block, Fixupp):
-                            if block.fix_dat.frame_by_thread:
-                                frame_method = self.threads["frame"][
-                                    block.fix_dat.frame]["method"]  # refer to most recent frame thread with this number
-                            else:
-                                frame_method = block.fix_dat.frame
-                            if block.fix_dat.target_by_thread:
-                                target_method = self.threads["target"][
-                                    block.fix_dat.target][
-                                    "method"]  # refer to most recent target thread with this number
-                            else:
-                                target_method = block.fix_dat.target
+                            fixup = block.deserialize()
                     rec, src, module = self.step(module)
                 module = (rec,) + module
             elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
@@ -793,7 +801,7 @@ class DeserializedModule:
                     linenums["Locatability"] = "logical"
                 self.linenums = linenums
 
-    def thread_deserialize(self, block):
+    def thread_deserialize(self, block: Thread):
         back = block.deserialize()
         if block.thred in self.threads[block.thread_type]:
             print(self.threads[block.thread_type][block.thred], "discarded", file=sys.stderr)
