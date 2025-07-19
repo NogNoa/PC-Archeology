@@ -692,6 +692,7 @@ class DeserializedModule:
     linenums: dict
     data: list[dict]
     threads: thread_dict
+    end: ModEnd
 
     @staticmethod
     def step(module: tuple[Record, ...]) -> tuple[Record, Subrecord | list[Subrecord], tuple[Record, ...]]:
@@ -702,8 +703,7 @@ class DeserializedModule:
     def __init__(self, module: tuple[Record, ...]):
         rec, src, module = self.step(module)
         assert rec.rectype in {RecordType.THEADR, RecordType.LHEADR}
-        assert isinstance(rec.body, NAME)
-        self.name = rec.body.deserialize()
+        self.name = src.deserialize()
         rec, src, module = self.step(module)
         if isinstance(src, NAME):
             self.path = src.deserialize()
@@ -714,7 +714,7 @@ class DeserializedModule:
             self.lnames.extend([n.deserialize() for n in rec.body])
             rec, src, module = self.step(module)
         self.segments = []
-        while isinstance(src, SegDef):
+        while rec.rectype == RecordType.SEGDEF:
             segment = src.deserialize(self.lnames)
             self.segments.append(segment)
             rec, src, module = self.step(module)
@@ -775,7 +775,9 @@ class DeserializedModule:
                 break
             rec, src, module = self.step(module)
         self.linenums = {}
-        assert rec.rectype == RecordType.MODEND
+        assert isinstance(src, ModEnd)
+        self.end = src
+        assert not module
         for rec in module:
             src = rec.body
             if isinstance(src, LinNum):
