@@ -549,16 +549,15 @@ class LEData(DataRec):
         assert len(self.body) <= 0x400
 
     def deserialize(self, segments: list[dict], *args):
-        if all(b=self.body[0] for b in self.body):
+        if all(b==self.body[0] for b in self.body):
             return self.homogeneous_to_iterated(self.body[0:1], len(self.body)).deserialize(segments)
         datum = super().deserialize(segments)
         datum["locateability"] = "logical"
         datum["form"] = "enumerated"
         return datum
 
-    @staticmethod
-    def homogeneous_to_iterated(value: bytes = b'\0', repeats: int = 0x100):
-        return LIData(IteratedBlock(repeats, 0, value))
+    def homogeneous_to_iterated(self, value: bytes = b'\0', repeats: int = 0x100):
+        return LIData(self.segment, self.offset, IteratedBlock(repeats, 0, value))
 
 
 @dataclass
@@ -606,11 +605,13 @@ class IteratedBlock:
 class LIData(DataRec):
     body: IteratedBlock
 
-    def from_bytes(self, val: bytes):
-        super().__init__(val)
+    @classmethod
+    def from_bytes(cls, val: bytes):
+        self = DataRec(val)
         # noinspection PyTypeChecker
         self.body, val = IteratedBlock.create(self.body)
         assert not val
+        return cls(self.segment, self.offset, self.body)
 
     def deserialize(self, segments: list[dict[str, str]], *args):
         datum = super().deserialize(segments)
