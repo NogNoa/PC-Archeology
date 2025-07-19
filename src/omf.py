@@ -549,12 +549,19 @@ class LEData(DataRec):
         assert len(self.body) <= 0x400
 
     def deserialize(self, segments: list[dict], *args):
+        if all(b=self.body[0] for b in self.body):
+            return self.homogeneous_to_iterated(self.body[0:1], len(self.body)).deserialize(segments)
         datum = super().deserialize(segments)
         datum["locateability"] = "logical"
         datum["form"] = "enumerated"
         return datum
 
+    @staticmethod
+    def homogeneous_to_iterated(value: bytes = b'\0', repeats: int = 0x100):
+        return LIData(IteratedBlock(repeats, 0, value))
 
+
+@dataclass
 class IteratedBlock:
     repeats: int  # 16-bit
     blocks: int   # 16-bit
@@ -599,7 +606,7 @@ class IteratedBlock:
 class LIData(DataRec):
     body: IteratedBlock
 
-    def __init__(self, val: bytes):
+    def from_bytes(self, val: bytes):
         super().__init__(val)
         # noinspection PyTypeChecker
         self.body, val = IteratedBlock.create(self.body)
@@ -666,7 +673,7 @@ class Record:
         elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
             body = LEData(val)
         elif rectype in {RecordType.LIDATA, RecordType.LIDATA2}:
-            body = LIData(val)
+            body = LIData.from_bytes(val)
         elif rectype == RecordType.FIXUPP:
             body = []
             while val:
@@ -824,7 +831,7 @@ for scroll in scroll_path.iterdir():
         content = f.read()
     module = Module(content)
     with open(codex_path, "w") as f:
-        f.write(str(DeserializedModule(module())).replace(', ', ',\t'))
+        f.writelines(f"{key}={val}\n".replace(', ', ',\t') for key, val in vars(DeserializedModule(module())).items())
         #f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
     # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
 
