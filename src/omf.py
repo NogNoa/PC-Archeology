@@ -527,10 +527,13 @@ class DataRec(Subrecord):
     segment: int
     offset: int
 
-    def __init__(self, body: bytes):
-        self.segment, body = index_create(body)
-        self.offset = body[1] << 8 | body[0]
-        self.body = body[2:]
+    @classmethod
+    def from_bytes(cls, body: bytes):
+        segment, body = index_create(body)
+        offset = body[1] << 8 | body[0]
+        self = DataRec(segment, offset)
+        body = body[2:]
+        return self, body
 
     def deserialize(self, segments: list[dict]):
         datum = super().deserialize()
@@ -544,12 +547,14 @@ class DataRec(Subrecord):
 class LEData(DataRec):
     body: bytes
 
-    def __init__(self, body: bytes):
-        super().__init__(body)
-        assert len(self.body) <= 0x400
+    @classmethod
+    def from_bytes(cls, body: bytes):
+        self, body = super().from_bytes(body)
+        assert len(body) <= 0x400
+        return cls(self.segment, self.offset, body)
 
     def deserialize(self, segments: list[dict], *args):
-        if all(b==self.body[0] for b in self.body):
+        if all(b == self.body[0] for b in self.body):
             return self.homogeneous_to_iterated(self.body[0:1], len(self.body)).deserialize(segments)
         datum = super().deserialize(segments)
         datum["locateability"] = "logical"
@@ -567,23 +572,23 @@ class IteratedBlock:
     content: bytes | list[Self]
 
     @classmethod
-    def create(cls, body: bytes):
-        self = cls()
-        self.repeats = body[1] << 8 | body[0]
-        assert self.repeats > 0
-        self.blocks = body[3] << 8 | body[2]
-        if not self.blocks:
-            length = body[4]
-            self.content = body[5:5+length]
-            body = body[5+length:]
+    def create(cls, rest: bytes):
+        repeats = rest[1] << 8 | rest[0]
+        assert repeats > 0
+        blocks = rest[3] << 8 | rest[2]
+        if not blocks:
+            length = rest[4]
+            content = rest[5:5 + length]
+            rest = rest[5 + length:]
         else:
-            self.content = []
-            body = body[4:]
-            for _ in range(self.blocks):
-                blck, body = IteratedBlock.create(body)
+            content = []
+            rest = rest[4:]
+            for _ in range(blocks):
+                blck, rest = IteratedBlock.create(rest)
                 # noinspection PyTypeChecker
-                self.content.append(blck)
-        return self, body
+                content.append(blck)
+        self = cls(repeats, blocks, content)
+        return self, rest
 
     def __len__(self):
         if isinstance(self.content, list):
@@ -607,9 +612,9 @@ class LIData(DataRec):
 
     @classmethod
     def from_bytes(cls, val: bytes):
-        self = DataRec(val)
+        self, body = super().from_bytes(val)
         # noinspection PyTypeChecker
-        self.body, val = IteratedBlock.create(self.body)
+        self.body, val = IteratedBlock.create(body)
         assert not val
         return cls(self.segment, self.offset, self.body)
 
@@ -672,7 +677,7 @@ class Record:
         elif rectype in {RecordType.LINNUM, RecordType.LINNUM2}:
             body = LinNum(val)
         elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
-            body = LEData(val)
+            body = LEData.from_bytes(val)
         elif rectype in {RecordType.LIDATA, RecordType.LIDATA2}:
             body = LIData.from_bytes(val)
         elif rectype == RecordType.FIXUPP:
@@ -833,9 +838,8 @@ for scroll in scroll_path.iterdir():
     module = Module(content)
     with open(codex_path, "w") as f:
         f.writelines(f"{key}={val}\n".replace(', ', ',\t') for key, val in vars(DeserializedModule(module())).items())
-        #f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
+        # f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
     # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
-
 
 
 # todo: body should be one subrecord. do something else for list of subrecord
