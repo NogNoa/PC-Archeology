@@ -192,6 +192,18 @@ class FixDat:
         assert not self.frame_by_thread or not self.frame_method & 4
         assert not self.target_by_thread or not self.no_target_displacement
 
+    def deserialize(self, threads: dict, *args, **kwargs):
+        back = copy(vars(self))
+        if self.frame_by_thread:
+            back["frame_method"] = threads["frame"][
+                self.frame_method]["method"]  # refer to most recent frame thread with this number
+        del back["frame_by_thread"]
+        if self.target_by_thread:
+            back["target_method"] = threads["target"][
+                self.target_method]["method"]
+        del back["target_by_thread"]  # refer to most recent target thread with this number
+        return back
+
 
 @dataclass
 class Fixupp(Subrecord):
@@ -223,13 +235,7 @@ class Fixupp(Subrecord):
 
     def deserialize(self, threads: dict, *args, **kwargs):
         fixup = super().deserialize()
-        if self.fix_dat.frame_by_thread:
-            fixup["fixdat"].frame_method = threads["frame"][
-                self.fix_dat.frame_method]["method"]  # refer to most recent frame thread with this number
-        if self.fix_dat.target_by_thread:
-            fixup["fixdat"].target_method = threads["target"][
-                self.fix_dat.target_method][
-                "method"]  # refer to most recent target thread with this number
+        fixup["fix_dat"] = self.fix_dat.deserialize(threads)
         return fixup
 
 
@@ -411,7 +417,6 @@ class SegAttr(Subrecord):
     def deserialize(self):
         back = super().deserialize()
         is_physical = self.align_type in {0, 5}
-        back["is_physical"] = is_physical
         back["locateability"] = "absolute" if is_physical else \
             "load-time locateable" if self.align_type == 6 else \
             "relocateable"
@@ -421,7 +426,6 @@ class SegAttr(Subrecord):
             "page" if self.align_type == 4 else \
             "unknown"
         del back["align_type"]
-        back["named"] = self.named
         if back["child"] is not None:
             back["child"] = self.child.deserialize()
         else:
@@ -756,16 +760,17 @@ class DeserializedModule:
             if isinstance(src, DataRec):
                 # content_def item
                 datum = src.deserialize(self.segments)
-                self.data.append(datum)
+                datum["fixups"] = []
                 rec, src, module = self.step(module)
                 while rec.rectype == RecordType.FIXUPP:
                     for block in src:
                         if isinstance(block, Thread):
                             self.thread_deserialize(block)
                         elif isinstance(block, Fixupp):
-                            fixup = block.deserialize()
+                            datum["fixups"].append(block.deserialize(self.threads))
                     rec, src, module = self.step(module)
-                module = (rec,) + module
+                self.data.append(datum)
+                continue
             elif rec.rectype == RecordType.FIXUPP and all((isinstance(block, Thread) for block in src)):
                 # thread_def item
                 for block in src:
@@ -819,9 +824,10 @@ for scroll in scroll_path.iterdir():
         content = f.read()
     module = Module(content)
     with open(codex_path, "w") as f:
-        f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
+        f.write(str(DeserializedModule(module())).replace(', ', ',\t'))
+        #f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
     # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
-    print(str(DeserializedModule(module())).replace(', ', ',\t'))
+
 
 
 # todo: body should be one subrecord. do something else for list of subrecord
