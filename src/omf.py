@@ -719,6 +719,7 @@ DatDef = ExtDef | PubDef | TypDef
 
 @dataclass
 class DeserializedModule:
+    comments: list[Comment]
     typedefs: list[dict]
     segments: list[dict]
     groups: list[dict]
@@ -736,6 +737,15 @@ class DeserializedModule:
         return rec, src, module
 
     def __init__(self, module: tuple[Record, ...]):
+        module = list(module)
+        self.comments = []
+        for pl, rec in enumerate(module):
+            src = rec.body
+            while isinstance(src, Comment):
+                self.comments.append(src)
+                del module[pl]
+                src = module[pl].body
+        module = tuple(module)
         rec, src, module = self.step(module)
         assert rec.rectype in {RecordType.THEADR, RecordType.LHEADR}
         self.name = src.deserialize()
@@ -797,7 +807,7 @@ class DeserializedModule:
                     self.publics.append(definition)
                 elif rec.rectype == RecordType.EXTDEF:
                     self.externals.append(definition)
-            elif rec.rectype != RecordType.COMMENT:
+            else:
                 break
             rec, src, module = self.step(module)
         self.linenums = {}
