@@ -459,7 +459,6 @@ class SegDef(Subrecord):
     class_name: int
     Overlay_name: int
 
-    # noinspection PyUnresolvedReferences
     def __init__(self, index, body: bytes):
         self.index = index
         self.seg_attr, body = SegAttr.Create(body)
@@ -526,7 +525,6 @@ class GroupDef(Subrecord):
     def deserialize(self, lnames, *args):
         back = super().deserialize()
         if self.name:
-            # noinspection PyTypeChecker
             back["name"] = lnames[self.name - 1]
         return back
 
@@ -551,7 +549,6 @@ class DataRec(Subrecord):
     def deserialize(self, segments: list[dict]):
         datum = super().deserialize()
         if self.segment and segments:
-            # noinspection PyTypeChecker
             datum["segment"] = segments[self.segment - 1]["name"]
         return datum
 
@@ -598,7 +595,6 @@ class IteratedBlock:
             rest = rest[4:]
             for _ in range(blocks):
                 blck, rest = IteratedBlock.create(rest)
-                # noinspection PyTypeChecker
                 content.append(blck)
         self = cls(repeats, blocks, content)
         return self, rest
@@ -626,7 +622,6 @@ class LIData(DataRec):
     @classmethod
     def from_bytes(cls, val: bytes):
         self, body = super().from_bytes(val)
-        # noinspection PyTypeChecker
         self.body, val = IteratedBlock.create(body)
         assert not val
         return cls(self.segment, self.offset, self.body)
@@ -841,11 +836,9 @@ class DeserializedModule:
 
 
 scroll_path = Path(sys.argv[1])
-# noinspection PyUnresolvedReferences
 for scroll in scroll_path.iterdir():
     if scroll.suffix.lower() != ".obj":
         continue
-    # noinspection PyUnresolvedReferences
     codex_path = Path(scroll.with_suffix('.record'))
     with open(scroll, "rb") as f:
         content = f.read()
@@ -854,6 +847,3 @@ for scroll in scroll_path.iterdir():
         f.writelines(f"{key}={val}\n".replace(', ', ',\t') for key, val in vars(DeserializedModule(module())).items())
         # f.writelines((str(m).replace(', ', ',\t') + '\n' for m in module()))
     # print(f"{scroll.name}:", *(r.rectype.name for r in module()), sep=",\t")
-
-
-# todo: body should be one subrecord. do something else for list of subrecord
