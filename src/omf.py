@@ -762,7 +762,7 @@ class DeserializedModule:
             else:
                 break
             rec, src, module = self.step(module)
-            if rec.rectype in {RecordType.SEGDEF, RecordType.SEGDEF2}:
+            if isinstance(src, SegDef):
                 segment = src.deserialize(self.lnames)
                 self.segments.append(segment)
             else:
@@ -808,7 +808,7 @@ class DeserializedModule:
                                              segments=self.segments, groups=self.groups)
                 if rec.rectype == RecordType.TYPDEF:
                     self.typedefs.append(definition)
-                elif rec.rectype in {RecordType.PUBDEF, RecordType.PUBDEF2}:
+                elif isinstance(src, PubDef):
                     self.publics.append(definition)
                 elif rec.rectype == RecordType.EXTDEF:
                     self.externals.append(definition)
