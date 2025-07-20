@@ -759,10 +759,7 @@ class DeserializedModule:
             if rec.rectype == RecordType.LNAMES:
                 assert isinstance(rec.body, list)
                 self.lnames.extend([n.deserialize() for n in rec.body])
-            else:
-                break
-            rec, src, module = self.step(module)
-            if isinstance(src, SegDef):
+            elif isinstance(src, SegDef):
                 segment = src.deserialize(self.lnames)
                 self.segments.append(segment)
             else:
