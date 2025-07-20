@@ -473,7 +473,7 @@ class SegDef(Subrecord):
             name_ind = segment[name_t]
             if name_ind:
                 segment[name_t] = lnames[name_ind - 1]
-        segment["name"] = " ".join(segment[name_t] for name_t in name_tii)
+        segment["name"] = " ".join(segment[name_t] for name_t in name_tii if segment[name_t])
         segment["seg_attr"] = self.seg_attr.deserialize()
         del segment["index"]
         return segment
@@ -754,14 +754,19 @@ class DeserializedModule:
             self.path = src.deserialize()
             rec, src, module = self.step(module)
         self.lnames = []
-        while rec.rectype == RecordType.LNAMES:
-            assert isinstance(rec.body, list)
-            self.lnames.extend([n.deserialize() for n in rec.body])
-            rec, src, module = self.step(module)
         self.segments = []
-        while rec.rectype == RecordType.SEGDEF:
-            segment = src.deserialize(self.lnames)
-            self.segments.append(segment)
+        while True:
+            if rec.rectype == RecordType.LNAMES:
+                assert isinstance(rec.body, list)
+                self.lnames.extend([n.deserialize() for n in rec.body])
+            else:
+                break
+            rec, src, module = self.step(module)
+            if rec.rectype in {RecordType.SEGDEF, RecordType.SEGDEF2}:
+                segment = src.deserialize(self.lnames)
+                self.segments.append(segment)
+            else:
+                break
             rec, src, module = self.step(module)
         self.typedefs = []
         self.groups = []
@@ -803,7 +808,7 @@ class DeserializedModule:
                                              segments=self.segments, groups=self.groups)
                 if rec.rectype == RecordType.TYPDEF:
                     self.typedefs.append(definition)
-                elif rec.rectype == RecordType.PUBDEF:
+                elif rec.rectype in {RecordType.PUBDEF, RecordType.PUBDEF2}:
                     self.publics.append(definition)
                 elif rec.rectype == RecordType.EXTDEF:
                     self.externals.append(definition)
