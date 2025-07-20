@@ -384,6 +384,19 @@ class LinNum(Subrecord):
         # noinspection PyTypeChecker
         self.body = tuple(body)
 
+    def deserialize(self, groups, segments, *args, **kwargs):
+        linenums = {}
+        if self.base.grp_ind and groups:
+            linenums["group"] = groups[self.base.grp_ind - 1]['name']
+        if self.base.seg_ind and segments:
+            linenums["segment"] = segments[self.base.seg_ind - 1]['name']
+        if self.base.frame_numb is not None:
+            linenums["frame_number"] = self.base.frame_numb
+            linenums["Locatability"] = "physical"
+        else:
+            linenums["Locatability"] = "logical"
+        return linenums
+
 
 @dataclass
 class SegAttr(Subrecord):
@@ -725,7 +738,7 @@ class DeserializedModule:
     groups: list[dict]
     publics: list[dict]
     externals: list[dict]
-    linenums: dict
+    linenums: list[dict]
     data: list[dict]
     threads: thread_dict
     end: ModEnd
@@ -780,6 +793,7 @@ class DeserializedModule:
         self.data = []
         self.publics = []
         self.threads = {"frame": {}, "target": {}}
+        self.linenums = []
         while True:
             # data item
             if isinstance(src, DataRec):
@@ -809,27 +823,15 @@ class DeserializedModule:
                     self.publics.append(definition)
                 elif rec.rectype == RecordType.EXTDEF:
                     self.externals.append(definition)
+            elif isinstance(src, LinNum):
+                linenums = src.deserialize(self.groups, self.segments)
+                self.linenums.append(linenums)
             else:
                 break
             rec, src, module = self.step(module)
-        self.linenums = {}
         assert isinstance(src, ModEnd)
         self.end = src
         assert not module
-        for rec in module:
-            src = rec.body
-            if isinstance(src, LinNum):
-                linenums = {}
-                if src.base.grp_ind and self.groups:
-                    linenums["group"] = self.groups[src.base.grp_ind - 1]
-                if src.base.seg_ind and self.segments:
-                    linenums["segment"] = self.segments[src.base.seg_ind - 1]
-                if src.base.frame_numb is not None:
-                    linenums["frame_number"] = src.base.frame_numb
-                    linenums["Locatability"] = "physical"
-                else:
-                    linenums["Locatability"] = "logical"
-                self.linenums = linenums
 
     def thread_deserialize(self, block: Thread):
         back = block.deserialize()
