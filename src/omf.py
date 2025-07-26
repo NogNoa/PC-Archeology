@@ -529,10 +529,58 @@ class GroupDef(Subrecord):
         return back
 
 
+@dataclass
 class LeafDescriptor:
+    type: str
+    value: any
+
     @classmethod
     def create(cls, data: bytes) -> tuple[Self, bytes]:
-        pass
+        type = data[0]
+        if 0 <= type < 0x80:
+            value = type
+            type = "number"
+            data = data[1:]
+        elif type == 0x80:
+            type = "null"
+            value = None
+            data = data[1:]
+        elif type == 0x81:
+            type = "number"
+            value = data[2] << 8 | data[1]
+            data = data[3:]
+        elif type == 0x82:
+            type = "name"
+            value, data = NAME(data[1:])
+        elif type == 0x83:
+            type = "index"
+            value, data = index_create(data)
+        elif type == 0x84:
+            type = "number"
+            value = data[3] << 0x10 | data[2] << 8 | data[1]
+            data = data[4:]
+        elif type == 0x85:
+            type = "repeat"
+            value = None
+        elif type == 0x86:
+            type = "signed"
+            value = data[1]
+            if value >= 0x80:
+                value = value - 0x100
+            data = data[2:]
+        elif type == 0x87:
+            type = "signed"
+            value = data[2] << 8 | data[1]
+            if value >= 0x8000:
+                value = value - 0x1_0000
+            data = data[3:]
+        elif type == 0x88:
+            type = "signed"
+            value = data[4] << 0x18 | data[3] << 0x10 | data[2] << 8 | data[1]
+            if value >= 0x8000_0000:
+                value = value - 0x1_0000_0000
+            data = data[5:]
+        return cls(type, value), data
 
 
 @dataclass
