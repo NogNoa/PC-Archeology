@@ -529,8 +529,27 @@ class GroupDef(Subrecord):
         return back
 
 
+class LeafDescriptor:
+    @classmethod
+    def create(cls, data: bytes) -> tuple[Self, bytes]:
+        pass
+
+
+@dataclass
 class TypDef(Subrecord):
-    pass
+    name: NAME
+    en: tuple[bool, ...]
+    leaves: LeafDescriptor
+
+    @classmethod
+    def create(cls, body: bytes) -> Self:
+        name, body = NAME.create(body)
+        en = body[0]
+        en = en & 0x80, en & 0x40, en & 0x20, en & 0x10, en & 8, en & 4, en & 2, en & 1
+        en = tuple(bool(i) for i in en)
+        leaves, body = LeafDescriptor.create(body[1:])
+        assert not body
+        return cls(name, en, leaves)
 
 
 @dataclass
@@ -539,7 +558,7 @@ class DataRec(Subrecord):
     offset: int
 
     @classmethod
-    def from_bytes(cls, body: bytes):
+    def create(cls, body: bytes):
         segment, body = index_create(body)
         offset = body[1] << 8 | body[0]
         self = DataRec(segment, offset)
@@ -558,8 +577,8 @@ class LEData(DataRec):
     body: bytes
 
     @classmethod
-    def from_bytes(cls, body: bytes):
-        self, body = super().from_bytes(body)
+    def create(cls, body: bytes):
+        self, body = super().create(body)
         assert len(body) <= 0x400
         return cls(self.segment, self.offset, body)
 
@@ -620,8 +639,8 @@ class LIData(DataRec):
     body: IteratedBlock
 
     @classmethod
-    def from_bytes(cls, val: bytes):
-        self, body = super().from_bytes(val)
+    def create(cls, val: bytes):
+        self, body = super().create(val)
         self.body, val = IteratedBlock.create(body)
         assert not val
         return cls(self.segment, self.offset, self.body)
@@ -685,9 +704,9 @@ class Record:
         elif rectype in {RecordType.LINNUM, RecordType.LINNUM2}:
             body = LinNum(val)
         elif rectype in {RecordType.LEDATA, RecordType.LEDATA2}:
-            body = LEData.from_bytes(val)
+            body = LEData.create(val)
         elif rectype in {RecordType.LIDATA, RecordType.LIDATA2}:
-            body = LIData.from_bytes(val)
+            body = LIData.create(val)
         elif rectype == RecordType.FIXUPP:
             body = []
             while val:
