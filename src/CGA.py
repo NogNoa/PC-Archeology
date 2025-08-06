@@ -96,9 +96,11 @@ parser.add_argument("scroll")
 parser.add_argument("action")
 parser.add_argument("line_length", type=int, default=LINE_PIX, nargs="?")
 parser.add_argument("-p", "--progrssive", action="store_true")
+parser.add_argument("-o", "--offset", type=int, default=0, nargs="?")
 args = parser.parse_args()
 scroll_nom = args.scroll
 with open(scroll_nom, "rb") as file:
+    file.seek(args.offset)
     scroll = file.read()
 
 if args.action == "cg":
