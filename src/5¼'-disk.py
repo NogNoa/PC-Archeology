@@ -6,9 +6,9 @@ import math
 import os
 import pathlib
 import time
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from argparse import ArgumentError
-from typing import Optional, Generator, TypeAlias, Self, Any
+from typing import Optional, Generator, TypeAlias, Self, Any, Sequence
 from collections.abc import Iterator
 
 Sector_sz = 0x200
@@ -305,7 +305,7 @@ class DiskStruct:
         return Sector_sz * (self.sector_numb - self.files_floor)
 
 
-class SeqWrapper:
+class SeqWrapper(ABC):
     item_type = any
 
     @abstractmethod
@@ -318,11 +318,16 @@ class SeqWrapper:
     def __call__(self) -> list:
         return self._val
 
-    def __getitem__(self, index: int) -> item_type:
+    def __getitem__(self, index: int | slice) -> item_type:
         return self._val[index]
 
-    def __setitem__(self, index: int, value: item_type):
-        self._val[index] = value
+    def __setitem__(self, index: int | slice, value: item_type | Sequence[item_type]):
+        if isinstance(index, int) and isinstance(value, self.item_type):
+            self._val[index] = value
+        elif isinstance(index, slice) and isinstance(value, Sequence) and isinstance(value[0], self.item_type):
+            self._val[index] = value
+        else:
+            raise TypeError
 
     def __contains__(self, item: item_type):
         return item in self._val
@@ -411,7 +416,7 @@ class Imagepart(Image):
             self.mom[self.offset + sect_index] = value
         elif isinstance(sect_index, slice):
             if any((sect_index.start < 0, self.__len__() <= sect_index.stop)): raise IndexError
-            if not isinstance(value, list) and isinstance(value[0], bytes): raise TypeError
+            if not (isinstance(value, list) and isinstance(value[0], bytes)): raise TypeError
             self.mom[self.offset + sect_index.start: self.offset + sect_index.stop] = value
 
     def __getitem__(self, index: int | slice) -> image_t:
