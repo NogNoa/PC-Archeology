@@ -68,7 +68,7 @@ class FileEntry:
         back = "{:<8}".format(self.name[:8]).encode("ansi")
         back += "{:<3}".format(self.ext[:3]).encode("ansi")
         back += (2*self.hidden + 4*self.system_file).to_bytes(1)
-        back += b'\0'*2
+        back += b'\0' * 2
         back += to_ms_time(self.create_datetime)
         back += to_ms_time(self.access_date)
         back += b'\0' * 2
@@ -78,15 +78,14 @@ class FileEntry:
         return back
 
 
-image_t : TypeAlias = list[bytes]
-fat_t : TypeAlias = list[int]
-loc_t : TypeAlias = list[int]
-dir_t : TypeAlias = list[FileEntry]
-file_desc_t : TypeAlias = tuple[FileEntry, loc_t]
+image_t: TypeAlias = list[bytes]
+fat_t: TypeAlias = list[int]
+loc_t: TypeAlias = list[int]
+dir_t: TypeAlias = list[FileEntry]
+file_desc_t: TypeAlias = tuple[FileEntry, loc_t]
 
 
 class Disk:
-
     class OutOfSpace(Exception):
         pass
 
@@ -306,7 +305,7 @@ class DiskStruct:
 
 
 class SeqWrapper(ABC):
-    item_type = any
+    item_type: type = any
 
     @abstractmethod
     def __init__(self):
@@ -321,10 +320,10 @@ class SeqWrapper(ABC):
     def __getitem__(self, index: int | slice) -> item_type:
         return self._val[index]
 
+    # noinspection PyTypeHints
     def __setitem__(self, index: int | slice, value: item_type | Sequence[item_type]):
-        if isinstance(index, int) and isinstance(value, self.item_type):
-            self._val[index] = value
-        elif isinstance(index, slice) and isinstance(value, Sequence) and isinstance(value[0], self.item_type):
+        if  ((isinstance(index,   int) and isinstance(value, self.item_type)) or
+             (isinstance(index, slice) and isinstance(value, Sequence) and isinstance(value[0], self.item_type))):
             self._val[index] = value
         else:
             raise TypeError
@@ -438,8 +437,6 @@ class Imagepart(Image):
             else:
                 stop = self.offset + index.stop
             return self.mom[start: stop: index.step]
-        else:
-            raise TypeError
 
     def __contains__(self, item) -> bool:
         return item in self()
@@ -615,8 +612,6 @@ class Directory(SeqWrapper):
         elif isinstance(item, int):
             sieve = lambda e: item == e.first_cluster
             err_massage = f"file not identified for cluster {item}"
-        else:
-            raise TypeError
         try:
             entry = tuple(filter(sieve, self._val))[0]
         except IndexError:
