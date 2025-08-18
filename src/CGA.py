@@ -51,19 +51,21 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     else:
         fields = (call,)
     for field_i, field in enumerate(fields):
-        for byte_i, byte in enumerate(field):
-            # each byte represents 4 pixels
-            x = 4 * (byte_i % line_sz)
-            y = byte_i // line_sz
+        field = (field[y*line_sz:(y+1)*line_sz] for y in range(hight))
+        for y, line in enumerate(field):
             if interlaced:
                 y = 2 * y + field_i
-            pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
-            pix_quad = (p & 3 for p in pix_quad)
-            for pixel_i, p in enumerate(pix_quad):
-                try:
-                    pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
-                except IndexError:
-                    print(f"Error: draw to [{x+pixel_i}, {y}]")
+            for byte_i, byte in enumerate(line):
+                # each byte represents 4 pixels
+                x = 4 * byte_i
+                pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
+                pix_quad = (p & 3 for p in pix_quad)
+                for pixel_i, p in enumerate(pix_quad):
+                    x = x + pixel_i
+                    try:
+                        pixels[x, y] = CGA_mode4_pallete_1(p)
+                    except IndexError:
+                        print(f"Error: draw to [{x+pixel_i}, {y}]")
     return image
 
 
