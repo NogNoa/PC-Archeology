@@ -50,6 +50,7 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
         fields = call[:field_sz], call[field_sz:]
     else:
         fields = (call,)
+    del call
     for field_i, field in enumerate(fields):
         lines = (field[y*line_sz:(y+1)*line_sz] for y in range(hight))
         for y, line in enumerate(lines):
@@ -87,7 +88,7 @@ def draw_1bit_font(call: bytes) -> Image.Image:
     image = Image.new("1", (0x100, math.ceil(len(call) / 0x20)))
     pixels = image.load()
     letters = (call[i*8:(i+1)*8] for i in range(math.ceil(len(call) / 8)))
-    for letter_i, letter in enumerate(letters)
+    for letter_i, letter in enumerate(letters):
         rows = (letter[i * 0x20:(i+1) * 0x20] for i in range(len(letter)))
         for y, byte in enumerate(call):
             col = letter_i % 0x20

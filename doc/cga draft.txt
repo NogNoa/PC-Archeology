@@ -27,9 +27,9 @@ field_byte_i = file_byte_i
 y = field_byte_i // line_sz
 
 file = row[*]
-row = letter[0x20]
+letter = row[0x20]
 letter = byte[8]
-byte = col[8]
+byte = row[4]
 
 file = byte[0x400]
 
@@ -39,14 +39,8 @@ file = byte[0x400]
         col = (letter_i) % 0x20
         row = (letter_i) // 0x20
 
-file = field[2]
-byte = field[field_sz]
+file = field[2]         {field_sz = len(call) // 2}
+field = byte[field_sz]  {field_i = byte_i // field_sz}
+line = byte[line_sz]    {y = byte_i // line_sz}
+byte = pixel[4]         {x = 4 * (byte_i % line_sz)  + pixel_i}
 
- line_sz = math.ceil(width_pix / 4)
-    hight = math.ceil(len(call) / line_sz) + 1
-    image = Image.new("RGB", (width_pix, hight))
-    pixels = image.load()
-    field_sz = len(call) // 2
-    for byte_i, byte in enumerate(call):
-        field_i = byte_i // field_sz
-        ...
