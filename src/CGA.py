@@ -42,8 +42,12 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     hight = math.ceil(len(call) / line_sz) + 1
     image = Image.new("RGB", (width_pix, hight))
     pixels = image.load()
+    # An interlaced file is made of lines which are devided into two fields.
+    # The fields go sequentialy in both the file and the CGA screen
+    # buffer, but are interleaved on the monitor.
     field_sz = len(call) // 2
     for byte_i, byte in enumerate(call):
+        # each byte represents 4 pixels
         field_i = byte_i // field_sz
         byte_i %= field_sz
         x = 4 * (byte_i % line_sz)

@@ -1,0 +1,10 @@
+Line_pix = 320
+line_byte = Line_pix // 4 = 80
+col = size(file) / line_byte 
+
+image[Line_pix, size(file) // line_byte + 2]
+
+line_pix * (size(file) // line_byte + 2) =
+line_pix * (size(file) // (Line_pix // 4)+ 2) =
+size(file) // (1 // 4) + 2 * line_pix =
+size(file) * 4 + 2 * line_pix
