@@ -9,7 +9,7 @@ GLOBAL_INTENSITY = 0x55
 FIELD_SZ = 0x2000
 LINE_PIX = 320
 LINE_SZ = LINE_PIX  // 4
-MESG_LINE_SZ = 0x20
+MESG_WIDTH_PIX = 0x80
 
 # CG hight is 205 lines
 
@@ -51,8 +51,8 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     else:
         fields = (call,)
     for field_i, field in enumerate(fields):
-        field_gen = (field[y*line_sz:(y+1)*line_sz] for y in range(hight))
-        for y, line in enumerate(field_gen):
+        lines = (field[y*line_sz:(y+1)*line_sz] for y in range(hight))
+        for y, line in enumerate(lines):
             if interlaced:
                 y = 2 * y + field_i
             for byte_i, byte in enumerate(line):
@@ -84,18 +84,19 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 
 def draw_1bit_font(call: bytes) -> Image.Image:
-    image = Image.new("1", (0x100, math.ceil(len(scroll) / 0x20)))
+    image = Image.new("1", (0x100, math.ceil(len(call) / 0x20)))
     pixels = image.load()
-    for byte_i, byte in enumerate(call):
-        letter_i = byte_i // 8
-        y = byte_i % 8
-        col = letter_i % 0x20
-        row = letter_i // 0x20
-        for x in range(8):
-            try:
-                pixels[8 * col + x, 8 * row + y] = byte >> (7 - x) & 1
-            except IndexError:
-                print(f"Error: draw to [{x}, {y}]")
+    letters = (call[i*8:(i+1)*8] for i in range(math.ceil(len(call) / 8)))
+    for letter_i, letter in enumerate(letters)
+        rows = (letter[i * 0x20:(i+1) * 0x20] for i in range(len(letter)))
+        for y, byte in enumerate(call):
+            col = letter_i % 0x20
+            row = letter_i // 0x20
+            for x in range(8):
+                try:
+                    pixels[8 * col + x, 8 * row + y] = byte >> (7 - x) & 1
+                except IndexError:
+                    print(f"Error: draw to [{x}, {y}]")
     return image
 
 
@@ -114,7 +115,7 @@ with open(scroll_nom, "rb") as file:
 if args.action == "cg":
     image = draw_CG(scroll, args.line_length, not args.progrssive)
 elif args.action == "lm":
-    image = draw_CG(scroll, 0x80, False)
+    image = draw_CG(scroll, MESG_WIDTH_PIX, False)
 elif sys.argv[2] == "ft":
     image = draw_1bit_font(scroll)
 else:
