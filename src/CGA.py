@@ -45,22 +45,25 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
     # An interlaced file is made of lines which are devided into two fields.
     # The fields go sequentialy in both the file and the CGA screen
     # buffer, but are interleaved on the monitor.
-    field_sz = len(call) // 2
-    for byte_i, byte in enumerate(call):
-        # each byte represents 4 pixels
-        field_i = byte_i // field_sz
-        byte_i %= field_sz
-        x = 4 * (byte_i % line_sz)
-        y = byte_i // line_sz
-        if interlaced:
-            y = 2 * y + field_i
-        pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
-        pix_quad = (p & 3 for p in pix_quad)
-        for pixel_i, p in enumerate(pix_quad):
-            try:
-                pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
-            except IndexError:
-                print(f"Error: draw to [{x+pixel_i}, {y}]")
+    if interlaced:
+        field_sz = len(call) // 2
+        fields = call[:field_sz], call[field_sz:]
+    else:
+        fields = (call,)
+    for field_i, field in enumerate(fields):
+        for byte_i, byte in enumerate(field):
+            # each byte represents 4 pixels
+            x = 4 * (byte_i % line_sz)
+            y = byte_i // line_sz
+            if interlaced:
+                y = 2 * y + field_i
+            pix_quad = byte >> 6, byte >> 4, byte >> 2, byte
+            pix_quad = (p & 3 for p in pix_quad)
+            for pixel_i, p in enumerate(pix_quad):
+                try:
+                    pixels[x + pixel_i, y] = CGA_mode4_pallete_1(p)
+                except IndexError:
+                    print(f"Error: draw to [{x+pixel_i}, {y}]")
     return image
 
 

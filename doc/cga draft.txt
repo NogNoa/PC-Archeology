@@ -8,3 +8,20 @@ line_pix * (size(file) // line_byte + 2) =
 line_pix * (size(file) // (Line_pix // 4)+ 2) =
 size(file) // (1 // 4) + 2 * line_pix =
 size(file) * 4 + 2 * line_pix
+
+interlaced
+field_byte_i = file_byte_i % field_sz
+y = 2 * ( field_byte_i // line_sz) + field_i
+field_sz = file_sz // 2
+file_byte_i = field_byte_i + field_i * (file_sz // 2)
+file_byte_i - field_byte_i = field_i * (file_sz // 2)
+(file_byte_i - field_byte_i)/ (file_sz // 2) = field_i
+y = 2 * ( field_byte_i // line_sz) + (file_byte_i - field_byte_i)/ (file_sz // 2)
+
+y = 2 * ( (file_byte_i % field_sz) // line_sz) + field_i
+y = 2 * ( (file_byte_i % (file_sz // 2)) // line_sz) + field_i
+y = 2 * ( ((field_byte_i + field_i * (file_sz // 2)) % (file_sz // 2)) // line_sz) + field_i
+
+progressive:
+field_byte_i = file_byte_i
+y = field_byte_i // line_sz
