@@ -87,15 +87,16 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 def draw_1bit_font(call: bytes) -> Image.Image:
     image = Image.new("1", (0x100, math.ceil(len(call) / 0x20)))
     pixels = image.load()
-    letters = (call[i*8:(i+1)*8] for i in range(math.ceil(len(call) / 8)))
+    letters = (call[i*8:(i+1)*8] for i in range(len(call)))
     for letter_i, letter in enumerate(letters):
-        rows = (letter[i * 0x20:(i+1) * 0x20] for i in range(len(letter)))
-        for y, byte in enumerate(call):
-            col = letter_i % 0x20
-            row = letter_i // 0x20
-            for x in range(8):
+        col = letter_i % 0x20
+        row = letter_i // 0x20
+        for byte_i, byte in enumerate(letter):
+            y =  8 * row + byte_i
+            for pix_i in range(8):
+                x = 8 * col + pix_i
                 try:
-                    pixels[8 * col + x, 8 * row + y] = byte >> (7 - x) & 1
+                    pixels[x, y] = byte >> (7 - pix_i) & 1
                 except IndexError:
                     print(f"Error: draw to [{x}, {y}]")
     return image
