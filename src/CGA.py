@@ -10,6 +10,10 @@ FIELD_SZ = 0x2000
 LINE_PIX = 320
 LINE_SZ = LINE_PIX  // 4
 MESG_WIDTH_PIX = 0x80
+ROW_LETTERS = 0x20
+LETTER_WIDTH_PIX = 8
+LETTER_HIGHT = 8
+ROW_PIX = ROW_LETTERS * LETTER_WIDTH_PIX
 
 # CG hight is 205 lines
 
@@ -85,16 +89,16 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 
 def draw_1bit_font(call: bytes) -> Image.Image:
-    image = Image.new("1", (0x100, math.ceil(len(call) / 0x20)))
+    image = Image.new("1", (ROW_PIX, math.ceil(len(call) / ROW_LETTERS)))
     pixels = image.load()
-    rows = (call[i*0x100:(i+1)*0x100] for i in range(len(call)))
+    rows = (call[i * ROW_PIX:(i+1) * ROW_PIX] for i in range(len(call)))
     for row_i, row in enumerate(rows):
-        letters = (row[i*8:(i+1)*8] for i in range(0x20))
+        letters = (row[i * LETTER_HIGHT: (i+1) * LETTER_HIGHT] for i in range(ROW_LETTERS))
         for letter_i, letter in enumerate(letters):
             for byte_i, byte in enumerate(letter):
                 y = 8 * row_i + byte_i
-                for pix_i in range(8):
-                    x = 8 * letter_i + pix_i
+                for pix_i in range(LETTER_WIDTH_PIX):
+                    x = LETTER_WIDTH_PIX * letter_i + pix_i
                     try:
                         pixels[x, y] = byte >> (7 - pix_i) & 1
                     except IndexError:

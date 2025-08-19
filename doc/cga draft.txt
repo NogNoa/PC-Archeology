@@ -26,7 +26,7 @@ progressive:
 field_byte_i = file_byte_i
 y = field_byte_i // line_sz
 
-file = letter[*]
+file = letter[4]
 row = letter[0x20]
 letter = byte[8]
 byte = pixel[8]
