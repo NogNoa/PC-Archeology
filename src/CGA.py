@@ -87,18 +87,18 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 def draw_1bit_font(call: bytes) -> Image.Image:
     image = Image.new("1", (0x100, math.ceil(len(call) / 0x20)))
     pixels = image.load()
-    letters = (call[i*8:(i+1)*8] for i in range(len(call)))
-    for letter_i, letter in enumerate(letters):
-        col = letter_i % 0x20
-        row = letter_i // 0x20
-        for byte_i, byte in enumerate(letter):
-            y =  8 * row + byte_i
-            for pix_i in range(8):
-                x = 8 * col + pix_i
-                try:
-                    pixels[x, y] = byte >> (7 - pix_i) & 1
-                except IndexError:
-                    print(f"Error: draw to [{x}, {y}]")
+    rows = (call[i*0x100:(i+1)*0x100] for i in range(len(call)))
+    for row_i, row in enumerate(rows):
+        letters = (row[i*8:(i+1)*8] for i in range(0x20))
+        for letter_i, letter in enumerate(letters):
+            for byte_i, byte in enumerate(letter):
+                y = 8 * row_i + byte_i
+                for pix_i in range(8):
+                    x = 8 * letter_i + pix_i
+                    try:
+                        pixels[x, y] = byte >> (7 - pix_i) & 1
+                    except IndexError:
+                        print(f"Error: draw to [{x}, {y}]")
     return image
 
 
@@ -124,13 +124,3 @@ else:
     raise ValueError
 
 image.save(f"{scroll_nom}.png")
-
-"""field_i = byte_i // FIELD_SZ
-hight = ceil(len(call) / line_sz) + 1
-line_sz = ceil(width_pix / 4)
-width_pix default LINE_PIX
-len(call) default 0x4000
-field_sz = len(call) // 2
-field_i = byte_i // (len(call) // 2)
-
-byte_i % (byte_i // (len(call) // 2))"""

@@ -27,9 +27,10 @@ field_byte_i = file_byte_i
 y = field_byte_i // line_sz
 
 file = letter[*]
-letter = row[0x20]
+row = letter[0x20]
 letter = byte[8]
-byte = row[4]
+byte = pixel[8]
+byte = pixel_row
 
 file = byte[0x400]
 
@@ -44,3 +45,12 @@ field = byte[field_sz]  {field_i = byte_i // field_sz}
 line = byte[line_sz]    {y = byte_i // line_sz}
 byte = pixel[4]         {x = 4 * (byte_i % line_sz)  + pixel_i}
 
+field_i = byte_i // FIELD_SZ
+hight = ceil(len(call) / line_sz) + 1
+line_sz = ceil(width_pix / 4)
+width_pix default LINE_PIX
+len(call) default 0x4000
+field_sz = len(call) // 2
+field_i = byte_i // (len(call) // 2)
+
+byte_i % (byte_i // (len(call) // 2))
