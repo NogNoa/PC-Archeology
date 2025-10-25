@@ -90,21 +90,9 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 
 def draw_1bit_font(call: bytes) -> Image.Image:
-    image = Image.new("1", (ROW_WIDTH, math.ceil(len(call) / ROW_LETTERS)))
-    pixels = image.load()
-    rows = (call[i * ROW_BYTES:(i+1) * ROW_BYTES] for i in range(len(call)))
-    for row_i, row in enumerate(rows):
-        letters = (row[i * LETTER_HIGHT: (i+1) * LETTER_HIGHT] for i in range(ROW_LETTERS))
-        for letter_i, letter in enumerate(letters):
-            for byte_i, byte in enumerate(letter):
-                y = LETTER_HIGHT * row_i + byte_i
-                for pix_i in range(LETTER_WIDTH):
-                    x = LETTER_WIDTH * letter_i + pix_i
-                    try:
-                        pixels[x, y] = byte >> (7 - pix_i) & 1
-                    except IndexError:
-                        print(f"Error: draw to [{x}, {y}]")
-    return image
+    return draw_w_costume_font(b'\r'.join((b''.join((ROW_LETTERS*j + i + 0x80).to_bytes(1) for i in range(ROW_LETTERS)))
+                                          for j in range(len(call) // ROW_LETTERS)),
+                               get_1bit_font(call))
 
 
 font_t = list[Image.Image]
@@ -130,7 +118,7 @@ def get_1bit_font(call: bytes) -> font_t:
     return font
 
 
-def print_w_costume_font(call: bytes, font: font_t) -> Image.Image:
+def draw_w_costume_font(call: bytes, font: font_t) -> Image.Image:
     lines = call.count(b'\r') + 1
     line_letters = LINE_PIX / LETTER_WIDTH
     image = Image.new("1", (LINE_PIX, lines * LETTER_HIGHT))
