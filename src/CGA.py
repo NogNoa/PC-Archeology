@@ -107,18 +107,48 @@ def draw_1bit_font(call: bytes) -> Image.Image:
     return image
 
 
-def get_1bit_font(call: bytes) -> list[Image.Image]:
-    pixels = image.load()
+font_t = list[Image.Image]
+
+
+def get_1bit_font(call: bytes) -> font_t:
+    font = []
     rows = (call[i * ROW_BYTES:(i + 1) * ROW_BYTES] for i in range(len(call)))
     for row_i, row in enumerate(rows):
         letters = (row[i * LETTER_HIGHT: (i + 1) * LETTER_HIGHT] for i in range(ROW_LETTERS))
         for letter_i, letter in enumerate(letters):
+            image = Image.new("1", (LETTER_WIDTH, LETTER_HIGHT))
+            pixels = image.load()
             for byte_i, byte in enumerate(letter):
-                y = LETTER_HIGHT * row_i + byte_i
+                y = byte_i
                 for pix_i in range(LETTER_WIDTH):
-                    x = LETTER_WIDTH * letter_i + pix_i
+                    x = pix_i
                     try:
                         pixels[x, y] = byte >> (7 - pix_i) & 1
+                    except IndexError:
+                        print(f"Error: draw to [{x}, {y}]")
+            font.append(image)
+    return font
+
+
+def print_w_costume_font(call: bytes, font: font_t) -> Image.Image:
+    lines = call.count(b'\r') + 1
+    line_letters = LINE_PIX / LETTER_WIDTH
+    image = Image.new("1", (LINE_PIX, lines * LETTER_HIGHT))
+    pixels = image.load()
+    row = col = 0
+    for byte in call:
+        if byte == b'\r':
+            row += 1
+            col = 0
+        elif ord(byte) < 0x80:
+            raise ValueError
+        else:
+            for letter_x in range(LETTER_WIDTH):
+                x = col * LETTER_HIGHT + letter_x
+                for letter_y in range(LETTER_HIGHT):
+                    y = row * LETTER_HIGHT + letter_y
+                    try:
+                        pixels[x, y] = font[ord(byte) - 0x80].getpixel((letter_x, letter_y))
                     except IndexError:
                         print(f"Error: draw to [{x}, {y}]")
     return image
