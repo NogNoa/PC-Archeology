@@ -91,7 +91,7 @@ def draw_2bit_font(call: bytes) -> Image.Image:
 
 def draw_1bit_font(call: bytes) -> Image.Image:
     return draw_w_costume_font(b'\r'.join((b''.join((ROW_LETTERS*j + i + 0x80).to_bytes(1) for i in range(ROW_LETTERS)))
-                                          for j in range(len(call) // ROW_LETTERS)),
+                                          for j in range(len(call)  // LETTER_WIDTH // ROW_LETTERS)),
                                get_1bit_font(call))
 
 
@@ -125,10 +125,10 @@ def draw_w_costume_font(call: bytes, font: font_t) -> Image.Image:
     pixels = image.load()
     row = col = 0
     for byte in call:
-        if byte == b'\r':
+        if byte == ord(b'\r'):
             row += 1
             col = 0
-        elif ord(byte) < 0x80:
+        elif byte < 0x80:
             raise ValueError
         else:
             for letter_x in range(LETTER_WIDTH):
@@ -136,9 +136,10 @@ def draw_w_costume_font(call: bytes, font: font_t) -> Image.Image:
                 for letter_y in range(LETTER_HIGHT):
                     y = row * LETTER_HIGHT + letter_y
                     try:
-                        pixels[x, y] = font[ord(byte) - 0x80].getpixel((letter_x, letter_y))
+                        pixels[x, y] = font[byte - 0x80].getpixel((letter_x, letter_y))
                     except IndexError:
                         print(f"Error: draw to [{x}, {y}]")
+            col += 1
     return image
 
 
@@ -167,3 +168,4 @@ if __name__ == "__main__":
             raise ValueError
 
         image.save(f"{scroll_nom}.png")
+    main()
