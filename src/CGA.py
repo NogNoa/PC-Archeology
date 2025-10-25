@@ -10,7 +10,7 @@ FIELD_SZ = 0x2000
 LINE_PIX = 320
 LINE_SZ = LINE_PIX  // 4
 MESG_WIDTH = 0x80
-ROW_LETTERS = 0x20
+ROW_LETTERS = 0x10
 LETTER_WIDTH = 8
 LETTER_HIGHT = 8
 ROW_WIDTH = ROW_LETTERS * LETTER_WIDTH
@@ -75,7 +75,7 @@ def draw_CG(call: bytes, width_pix, interlaced=True) -> Image.Image:
 
 
 def draw_2bit_font(call: bytes) -> Image.Image:
-    image = Image.new("L", (8, math.ceil(len(scroll) / 2)))
+    image = Image.new("L", (8, math.ceil(len(call) / 2)))
     pixels = image.load()
     for byte_i, byte in enumerate(call):
         x = 4 * (byte_i % 2)
@@ -107,25 +107,45 @@ def draw_1bit_font(call: bytes) -> Image.Image:
     return image
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("scroll")
-parser.add_argument("action")
-parser.add_argument("line_length", type=int, default=LINE_PIX, nargs="?")
-parser.add_argument("-p", "--progrssive", action="store_true")
-parser.add_argument("-o", "--offset", type=int, default=0, nargs="?")
-args = parser.parse_args()
-scroll_nom = args.scroll
-with open(scroll_nom, "rb") as file:
-    file.seek(args.offset)
-    scroll = file.read()
+def get_1bit_font(call: bytes) -> list[Image.Image]:
+    pixels = image.load()
+    rows = (call[i * ROW_BYTES:(i + 1) * ROW_BYTES] for i in range(len(call)))
+    for row_i, row in enumerate(rows):
+        letters = (row[i * LETTER_HIGHT: (i + 1) * LETTER_HIGHT] for i in range(ROW_LETTERS))
+        for letter_i, letter in enumerate(letters):
+            for byte_i, byte in enumerate(letter):
+                y = LETTER_HIGHT * row_i + byte_i
+                for pix_i in range(LETTER_WIDTH):
+                    x = LETTER_WIDTH * letter_i + pix_i
+                    try:
+                        pixels[x, y] = byte >> (7 - pix_i) & 1
+                    except IndexError:
+                        print(f"Error: draw to [{x}, {y}]")
+    return image
 
-if args.action == "cg":
-    image = draw_CG(scroll, args.line_length, not args.progrssive)
-elif args.action == "lm":
-    image = draw_CG(scroll, MESG_WIDTH, False)
-elif sys.argv[2] == "ft":
-    image = draw_1bit_font(scroll)
-else:
-    raise ValueError
 
-image.save(f"{scroll_nom}.png")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("scroll")
+    parser.add_argument("action")
+    parser.add_argument("line_length", type=int, default=LINE_PIX, nargs="?")
+    parser.add_argument("-p", "--progrssive", action="store_true")
+    parser.add_argument("-o", "--offset", type=int, default=0, nargs="?")
+    args = parser.parse_args()
+
+    def main():
+        scroll_nom = args.scroll
+        with open(scroll_nom, "rb") as file:
+            file.seek(args.offset)
+            scroll = file.read()
+
+        if args.action == "cg":
+            image = draw_CG(scroll, args.line_length, not args.progrssive)
+        elif args.action == "lm":
+            image = draw_CG(scroll, MESG_WIDTH, False)
+        elif sys.argv[2] == "ft":
+            image = draw_1bit_font(scroll)
+        else:
+            raise ValueError
+
+        image.save(f"{scroll_nom}.png")
